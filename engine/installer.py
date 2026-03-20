@@ -13,18 +13,37 @@ def apply_code(target_dir: str, code: str, filename: str):
         f.write(code)
 
 
+def _get_phase_name(phase):
+    """
+    Universal phase name resolver.
+    Works for:
+    - instances
+    - classes
+    - modules
+    """
+    if hasattr(phase, "name"):
+        return phase.name
+
+    if hasattr(phase, "__class__"):
+        return phase.__class__.__name__
+
+    if hasattr(phase, "__name__"):
+        return phase.__name__
+
+    return str(phase)
+
+
 def _run_module_phase(phase_module, target_dir):
-    """
-    Supports module-based phases.
-    """
     if hasattr(phase_module, "run"):
         return phase_module.run(target_dir)
 
-    raise TypeError(f"Invalid phase module: {phase_module.__name__}")
+    raise TypeError(f"Invalid phase module: {phase_module}")
 
 
 def install_phase(phase, target_dir: str):
-    # 🧬 MUTATION PATH
+    phase_name = _get_phase_name(phase)
+
+    # 🧬 mutation path
     if hasattr(phase, "mutate"):
         candidates = phase.mutate()
         result = execute_consensus_phase(phase, candidates=candidates)
@@ -32,7 +51,7 @@ def install_phase(phase, target_dir: str):
     elif hasattr(phase, "generate_candidates"):
         result = execute_consensus_phase(phase)
 
-    # 🧱 MODULE PHASE
+    # 🧱 module path
     elif hasattr(phase, "__name__"):
         _run_module_phase(phase, target_dir)
 
@@ -54,7 +73,8 @@ def install_phase(phase, target_dir: str):
     apply_code(target_dir, code, filename)
 
     score = score_phase({"valid": True}, receipt)
-    save_best_phase(target_dir, phase.__name__, code, score)
+
+    save_best_phase(target_dir, phase_name, code, score)
 
     return {
         "installed": True,
