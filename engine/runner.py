@@ -3,6 +3,7 @@ from engine.installer import install_phase
 from engine.validator import validate_phase
 from engine.receipt_writer import write_phase_receipt
 from engine.auto_upgrade import ensure_cge
+from engine.build_health import compute_health
 
 
 def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.json"):
@@ -32,7 +33,6 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
             parent_hash=parent_hash,
         )
 
-        # 🔥 CRITICAL FIX — move AFTER receipt creation
         parent_hash = receipt["receipt_hash"]
 
         receipts.append(receipt)
@@ -50,8 +50,12 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
                 "receipts": receipts,
             }
 
+    # ✅ RESTORE HEALTH
+    health = compute_health(results)
+
     return {
         "status": "success",
         "results": results,
         "receipts": receipts,
+        "health": health,
     }
