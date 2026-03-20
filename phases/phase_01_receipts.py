@@ -1,6 +1,6 @@
 def run(target_dir: str):
-    import os
     import json
+    import os
 
     receipt_path = os.path.join(target_dir, "receipt.json")
 
@@ -17,6 +17,4 @@ def validate(target_dir: str):
     import os
 
     path = os.path.join(target_dir, "receipt.json")
-    return {
-        "valid": os.path.exists(path),
-    }
+    return {"valid": os.path.exists(path)}
