@@ -16,13 +16,14 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
 
     results = []
     receipts = []
+
     parent_hash = None
+    failed = False
 
     for phase in phases:
         name = getattr(phase, "__name__", str(phase))
 
         install_result = install_phase(phase, target_dir)
-
         validation = validate_phase(phase, target_dir)
 
         receipt = write_phase_receipt(
@@ -34,27 +35,25 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
         )
 
         parent_hash = receipt["receipt_hash"]
-
         receipts.append(receipt)
+
+        valid = validation.get("valid", True)
 
         results.append({
             "phase": name,
-            "valid": validation.get("valid", True),
+            "valid": valid,
             "receipt_hash": parent_hash,
         })
 
-        if not validation.get("valid", True):
-            return {
-                "status": "failed",
-                "results": results,
-                "receipts": receipts,
-            }
+        if not valid:
+            failed = True
+            break
 
-    # ✅ RESTORE HEALTH
+    # ✅ ALWAYS compute health
     health = compute_health(results)
 
     return {
-        "status": "success",
+        "status": "failed" if failed else "success",
         "results": results,
         "receipts": receipts,
         "health": health,
