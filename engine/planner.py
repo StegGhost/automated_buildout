@@ -39,12 +39,6 @@ def normalize_phase_names(phase_names: List[str]) -> List[str]:
 
 
 def _is_valid_phase_module(mod: Any) -> bool:
-    """
-    A valid phase must provide at least one supported execution contract:
-    - run(target_dir)
-    - generate_candidates()
-    - be callable (legacy support)
-    """
     return (
         hasattr(mod, "run")
         or hasattr(mod, "generate_candidates")
