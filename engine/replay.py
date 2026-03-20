@@ -1,29 +1,21 @@
-import json
-from pathlib import Path
+def replay_build(receipts: list):
+    """
+    Minimal replay validator:
+    Confirms receipt chain integrity.
+    """
 
+    if not receipts:
+        return {"status": "empty"}
 
-def replay_build(target_dir: str, receipts=None):
-    receipts_dir = Path(target_dir) / ".buildout_receipts"
+    for i in range(1, len(receipts)):
+        prev = receipts[i - 1]
+        curr = receipts[i]
 
-    if receipts is None:
-        receipts = []
-        for file in receipts_dir.glob("*.json"):
-            with file.open() as f:
-                receipts.append(json.load(f))
+        if curr.get("parent_hash") != prev.get("receipt_hash"):
+            return {
+                "status": "invalid",
+                "reason": "chain_break",
+                "index": i,
+            }
 
-    receipts.sort(key=lambda x: x.get("timestamp", 0))
-
-    replay_log = []
-
-    for r in receipts:
-        replay_log.append({
-            "phase": r["phase"],
-            "status": "ok",  # ✅ FIX — match test expectation
-            "mode": r.get("install_result", {}).get("mode"),
-        })
-
-    return {
-        "status": "ok",
-        "phases": replay_log,
-        "count": len(replay_log),
-    }
+    return {"status": "ok"}
