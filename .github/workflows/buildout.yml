@@ -31,6 +31,11 @@ jobs:
       - name: Run tests
         run: pytest -q
 
+      - name: Show consensus receipts
+        run: |
+          echo "=== CONSENSUS ==="
+          cat demo_target/.buildout_receipts/*.json | grep consensus || true
+
       - name: Upload buildout receipts
         if: always()
         uses: actions/upload-artifact@v4
