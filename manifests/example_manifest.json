@@ -1,0 +1,8 @@
+{
+  "target_dir": "demo_target",
+  "phases": [
+    "phase_00_seed",
+    "phase_01_receipts",
+    "phase_02_chain"
+  ]
+}
