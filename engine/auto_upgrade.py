@@ -1,11 +1,10 @@
 def ensure_cge():
     """
-    Non-blocking.
-    Never raises.
-    Never required for build success.
+    Non-blocking probe.
+    Buildout must not fail if CGE is unavailable.
     """
     try:
-        import cge  # noqa
+        import cge  # noqa: F401
         return "present"
     except Exception:
         return "absent"
