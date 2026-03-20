@@ -1,4 +1,5 @@
 import os
+import types
 
 
 def apply_code(target_dir: str, code: str, filename: str):
@@ -13,12 +14,12 @@ def apply_code(target_dir: str, code: str, filename: str):
 def install_phase(phase, target_dir: str):
     """
     Supports:
-    - consensus phases (generate_candidates)
-    - module phases with run()
-    - legacy callable phases
+    - consensus phases
+    - module phases (with run function inside)
+    - callable phases
     """
 
-    # Consensus-aware phase
+    # 🔥 CONSENSUS MODE
     if hasattr(phase, "generate_candidates"):
         from engine.phase_consensus import execute_consensus_phase
 
@@ -35,25 +36,22 @@ def install_phase(phase, target_dir: str):
             "consensus_receipt": result["consensus_receipt"],
         }
 
-    # Module-based phase
-    if hasattr(phase, "run"):
-        phase.run(target_dir)
+    # 🔥 MODULE MODE (FIXED)
+    if isinstance(phase, types.ModuleType):
+        if hasattr(phase, "run"):
+            phase.run(target_dir)
+            return {"installed": True, "mode": "module"}
 
-        return {
-            "installed": True,
-            "mode": "module",
-        }
+        # 🔥 HANDLE nested module import case
+        for attr in dir(phase):
+            obj = getattr(phase, attr)
+            if callable(obj) and attr == "run":
+                obj(target_dir)
+                return {"installed": True, "mode": "module"}
 
-    # Legacy callable phase
+    # 🔥 FUNCTION MODE
     if callable(phase):
         phase(target_dir)
+        return {"installed": True, "mode": "function"}
 
-        return {
-            "installed": True,
-            "mode": "function",
-        }
-
-    raise TypeError(
-        f"Invalid phase type: {type(phase)}. "
-        f"Expected module with run(), consensus phase, or callable."
-    )
+    raise TypeError(f"Invalid phase type: {type(phase)}")
