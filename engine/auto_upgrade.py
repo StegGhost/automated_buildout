@@ -1,13 +1,11 @@
-import subprocess
-
-
 def ensure_cge():
+    """
+    Non-blocking.
+    Never raises.
+    Never required for build success.
+    """
     try:
         import cge  # noqa
         return "present"
     except Exception:
-        try:
-            subprocess.run(["pip", "install", "stegcge"], check=False)
-            return "installed"
-        except Exception:
-            return "failed"
+        return "absent"
