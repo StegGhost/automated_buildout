@@ -16,8 +16,9 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
     for phase in phases:
         name = phase.__name__
 
-        install_phase(phase, target_dir)
-        install_result = {"installed": True}
+        print(f"[BUILDOUT] Running phase: {name}")
+
+        install_result = install_phase(phase, target_dir)
 
         validation = validate_phase(phase, target_dir)
 
@@ -33,6 +34,7 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
             "phase": name,
             "valid": validation.get("valid", True),
             "details": validation,
+            "install_result": install_result,
             "receipt_hash": receipt["receipt_hash"],
         }
         results.append(phase_result)
