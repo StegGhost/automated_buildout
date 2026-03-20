@@ -19,12 +19,14 @@ def write_phase_receipt(
     receipts_dir.mkdir(parents=True, exist_ok=True)
 
     payload = {
-        "schema_version": "1.2.0",
+        "schema_version": "2.0.0",
         "timestamp": time.time(),
         "phase": phase_name,
         "install_result": install_result,
         "validation_result": validation_result,
         "parent_hash": parent_hash,
+        "variant_score": install_result.get("score"),
+        "consensus_mode": install_result.get("mode"),
     }
 
     receipt_hash = _hash(payload)
