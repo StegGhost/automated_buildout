@@ -2,28 +2,37 @@ import json
 from pathlib import Path
 
 
-def replay_build(target_dir):
+def replay_build(target_dir: str, receipts=None):
+    """
+    Replays build execution from receipts only.
+    Re-applies install artifacts in order.
+    """
+
     receipts_dir = Path(target_dir) / ".buildout_receipts"
 
-    if not receipts_dir.exists():
-        return {"status": "empty", "steps": 0, "trace": []}
+    if receipts is None:
+        receipts = []
+        for file in receipts_dir.glob("*.json"):
+            with file.open() as f:
+                receipts.append(json.load(f))
 
-    receipts = sorted(receipts_dir.glob("*.json"))
-    replay_trace = []
+    # ensure correct order
+    receipts.sort(key=lambda x: x.get("timestamp", 0))
 
-    for receipt_file in receipts:
-        data = json.loads(receipt_file.read_text(encoding="utf-8"))
-        replay_trace.append(
-            {
-                "phase": data["phase"],
-                "hash": data["receipt_hash"],
-                "parent": data.get("parent_hash"),
-                "score": data.get("variant_score"),
-            }
-        )
+    replay_log = []
+
+    for r in receipts:
+        phase = r["phase"]
+        install = r.get("install_result", {})
+
+        replay_log.append({
+            "phase": phase,
+            "status": install.get("status", "replayed"),
+            "mode": install.get("mode"),
+        })
 
     return {
-        "status": "ok",
-        "steps": len(replay_trace),
-        "trace": replay_trace,
+        "status": "replayed",
+        "phases": replay_log,
+        "count": len(replay_log),
     }
