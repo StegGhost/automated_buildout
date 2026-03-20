@@ -16,6 +16,4 @@ def validate(target_dir: str):
     import os
 
     path = os.path.join(target_dir, "chain.log")
-    return {
-        "valid": os.path.exists(path),
-    }
+    return {"valid": os.path.exists(path)}
