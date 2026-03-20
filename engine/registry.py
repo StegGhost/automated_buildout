@@ -14,26 +14,22 @@ def save_best_phase(target_dir: str, phase_name: str, code: str, score: float):
     best_path = phase_path / "best.py"
     meta_path = phase_path / "history.json"
 
-    # write best code
-    with best_path.open("w") as f:
+    with best_path.open("w", encoding="utf-8") as f:
         f.write(code)
 
-    # append history
     history = []
     if meta_path.exists():
-        with meta_path.open("r") as f:
+        with meta_path.open("r", encoding="utf-8") as f:
             history = json.load(f)
 
-    history.append({
-        "score": score,
-    })
+    history.append({"score": score})
 
-    with meta_path.open("w") as f:
+    with meta_path.open("w", encoding="utf-8") as f:
         json.dump(history, f, indent=2)
 
 
 def load_best_phase(target_dir: str, phase_name: str):
     path = Path(target_dir) / ".buildout_registry" / phase_name / "best.py"
     if path.exists():
-        return path.read_text()
+        return path.read_text(encoding="utf-8")
     return None
