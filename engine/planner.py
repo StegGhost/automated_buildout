@@ -1,7 +1,8 @@
 import importlib
 import json
 from pathlib import Path
-from typing import List
+from typing import List, Tuple, Any
+
 
 DEFAULT_PHASES = [
     "phases.phase_00_seed",
@@ -37,12 +38,36 @@ def normalize_phase_names(phase_names: List[str]) -> List[str]:
     return normalized
 
 
-def load_phases(manifest_path: str = "manifests/example_manifest.json"):
+def _is_valid_phase_module(mod: Any) -> bool:
+    """
+    A valid phase must provide at least one supported execution contract:
+    - run(target_dir)
+    - generate_candidates()
+    - be callable (legacy support)
+    """
+    return (
+        hasattr(mod, "run")
+        or hasattr(mod, "generate_candidates")
+        or callable(mod)
+    )
+
+
+def load_phases(
+    manifest_path: str = "manifests/example_manifest.json",
+) -> Tuple[List[Any], dict]:
     manifest = load_manifest(manifest_path)
     phase_names = normalize_phase_names(manifest["phases"])
 
     loaded = []
-    for p in phase_names:
-        mod = importlib.import_module(p)
+    for phase_name in phase_names:
+        mod = importlib.import_module(phase_name)
+
+        if not _is_valid_phase_module(mod):
+            raise TypeError(
+                f"Invalid phase module '{phase_name}'. "
+                f"Expected one of: run(), generate_candidates(), or callable module."
+            )
+
         loaded.append(mod)
+
     return loaded, manifest
