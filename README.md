@@ -143,6 +143,44 @@ Where:
 
 ------------------------------------------------------------------------
 
+# Automated Buildout
+
+Automated Buildout is a manifest-driven system factory that upgrades a
+target repo through deterministic build phases.
+
+## v1.1 capabilities
+
+-   manifest-controlled phase selection
+-   per-phase installation + validation
+-   chained phase receipts
+-   CI execution and artifact upload
+
+## Flow
+
+seed → receipts → chain → replay → invariants → consensus
+
+## Run locally
+
+``` bash
+python run_buildout.py
+pytest -q
+```
+
+## Manifest
+
+Edit:
+
+manifests/example_manifest.json
+
+to control: - target directory - enabled phases
+
+## Receipts
+
+Each build writes chained receipts into:
+
+`<target_dir>`{=html}/.buildout_receipts/
+
+
 # ⚡ Roadmap
 
 ## v1.1
