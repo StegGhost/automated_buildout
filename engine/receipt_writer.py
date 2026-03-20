@@ -2,28 +2,12 @@ import json
 import hashlib
 import time
 from pathlib import Path
-from typing import List
 
 
 def _hash(data: dict) -> str:
-    return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
-
-
-def load_existing_receipts(target_dir: str) -> List[dict]:
-    receipts_dir = Path(target_dir) / ".buildout_receipts"
-
-    if not receipts_dir.exists():
-        return []
-
-    receipts = []
-
-    for file in sorted(receipts_dir.glob("*.json")):
-        try:
-            receipts.append(json.loads(file.read_text(encoding="utf-8")))
-        except Exception:
-            continue
-
-    return receipts
+    return hashlib.sha256(
+        json.dumps(data, sort_keys=True).encode()
+    ).hexdigest()
 
 
 def write_phase_receipt(
@@ -37,7 +21,7 @@ def write_phase_receipt(
     receipts_dir.mkdir(parents=True, exist_ok=True)
 
     payload = {
-        "schema_version": "3.0.0",
+        "schema_version": "2.0.0",
         "timestamp": time.time(),
         "phase": phase_name,
         "install_result": install_result,
@@ -53,8 +37,29 @@ def write_phase_receipt(
     filename = f"{int(payload['timestamp'])}_{phase_name}.json"
     path = receipts_dir / filename
 
-    with path.open("w", encoding="utf-8") as f:
+    with path.open("w") as f:
         json.dump(payload, f, indent=2)
 
     payload["receipt_path"] = str(path)
+
     return payload
+
+
+# ✅ CRITICAL FIX
+def load_existing_receipts(target_dir: str):
+    receipts_dir = Path(target_dir) / ".buildout_receipts"
+
+    if not receipts_dir.exists():
+        return []
+
+    receipts = []
+
+    for file in receipts_dir.glob("*.json"):
+        with file.open() as f:
+            data = json.load(f)
+            receipts.append(data)
+
+    # 🔥 FIX: enforce deterministic ordering by timestamp
+    receipts.sort(key=lambda x: x.get("timestamp", 0))
+
+    return receipts
