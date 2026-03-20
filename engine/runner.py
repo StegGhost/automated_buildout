@@ -48,8 +48,13 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
                 "receipts": receipts,
             }
 
-    return {
-        "status": "success",
-        "results": results,
-        "receipts": receipts,
-    }
+from engine.build_health import compute_health
+
+health = compute_health(results)
+
+return {
+    "status": "success",
+    "results": results,
+    "receipts": receipts,
+    "health": health,
+}
