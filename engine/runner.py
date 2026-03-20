@@ -3,6 +3,8 @@ from engine.installer import install_phase
 from engine.validator import validate_phase
 from engine.receipt_writer import write_phase_receipt
 from engine.auto_upgrade import ensure_cge
+from engine.build_health import compute_health
+from engine.graph_exporter import export_graph
 
 
 def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.json"):
@@ -21,7 +23,6 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
         name = getattr(phase, "__name__", str(phase))
 
         install_result = install_phase(phase, target_dir)
-
         validation = validate_phase(phase, target_dir)
 
         receipt = write_phase_receipt(
@@ -46,15 +47,15 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
                 "status": "failed",
                 "results": results,
                 "receipts": receipts,
+                "health": compute_health(results),
             }
 
-from engine.build_health import compute_health
+    export_graph(receipts, target_dir)
+    health = compute_health(results)
 
-health = compute_health(results)
-
-return {
-    "status": "success",
-    "results": results,
-    "receipts": receipts,
-    "health": health,
-}
+    return {
+        "status": "success",
+        "results": results,
+        "receipts": receipts,
+        "health": health,
+    }
