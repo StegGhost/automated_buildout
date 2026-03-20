@@ -13,20 +13,39 @@ def apply_code(target_dir: str, code: str, filename: str):
         f.write(code)
 
 
+def _run_module_phase(phase_module, target_dir):
+    """
+    Supports module-based phases.
+    """
+    if hasattr(phase_module, "run"):
+        return phase_module.run(target_dir)
+
+    raise TypeError(f"Invalid phase module: {phase_module.__name__}")
+
+
 def install_phase(phase, target_dir: str):
-    # 🧬 v2 mutation support
+    # 🧬 MUTATION PATH
     if hasattr(phase, "mutate"):
         candidates = phase.mutate()
         result = execute_consensus_phase(phase, candidates=candidates)
+
     elif hasattr(phase, "generate_candidates"):
         result = execute_consensus_phase(phase)
-    else:
-        phase(target_dir)
+
+    # 🧱 MODULE PHASE
+    elif hasattr(phase, "__name__"):
+        _run_module_phase(phase, target_dir)
+
         return {
             "installed": True,
-            "mode": "direct",
+            "mode": "module",
+            "status": "ok",
         }
 
+    else:
+        raise TypeError(f"Unsupported phase type: {phase}")
+
+    # ✅ consensus path
     code = result["selected_code"]
     receipt = result["consensus_receipt"]
 
@@ -34,7 +53,6 @@ def install_phase(phase, target_dir: str):
 
     apply_code(target_dir, code, filename)
 
-    # score + registry
     score = score_phase({"valid": True}, receipt)
     save_best_phase(target_dir, phase.__name__, code, score)
 
