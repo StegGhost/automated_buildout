@@ -19,7 +19,7 @@ def load_existing_receipts(target_dir: str) -> List[dict]:
 
     for file in sorted(receipts_dir.glob("*.json")):
         try:
-            receipts.append(json.loads(file.read_text()))
+            receipts.append(json.loads(file.read_text(encoding="utf-8")))
         except Exception:
             continue
 
@@ -37,7 +37,7 @@ def write_phase_receipt(
     receipts_dir.mkdir(parents=True, exist_ok=True)
 
     payload = {
-        "schema_version": "2.0.0",
+        "schema_version": "3.0.0",
         "timestamp": time.time(),
         "phase": phase_name,
         "install_result": install_result,
@@ -53,9 +53,8 @@ def write_phase_receipt(
     filename = f"{int(payload['timestamp'])}_{phase_name}.json"
     path = receipts_dir / filename
 
-    with path.open("w") as f:
+    with path.open("w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
 
     payload["receipt_path"] = str(path)
-
     return payload
