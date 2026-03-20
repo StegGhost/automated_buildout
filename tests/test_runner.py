@@ -27,3 +27,22 @@ def test_phase_receipts_written():
 
     for i in range(1, len(receipts)):
         assert receipts[i]["parent_hash"] == receipts[i - 1]["receipt_hash"]
+
+def test_consensus_phase():
+    class MockPhase:
+        output_file = "test.py"
+
+        def generate_candidates(self):
+            return [
+                {"source": "gpt", "code": "print('hello world')"},
+                {"source": "claude", "code": "print('hello world')"},
+                {"source": "other", "code": "print('hi')"},
+            ]
+
+    from engine.installer import install_phase
+
+    result = install_phase(MockPhase(), "demo_target")
+
+    assert result["installed"] is True
+    assert result["mode"] == "consensus"
+    assert "consensus_receipt" in result
