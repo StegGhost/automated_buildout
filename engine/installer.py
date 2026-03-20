@@ -1,5 +1,7 @@
 import os
-import types
+from engine.phase_consensus import execute_consensus_phase
+from engine.fitness import score_phase
+from engine.registry import save_best_phase
 
 
 def apply_code(target_dir: str, code: str, filename: str):
@@ -7,68 +9,38 @@ def apply_code(target_dir: str, code: str, filename: str):
 
     os.makedirs(os.path.dirname(path), exist_ok=True)
 
-    with open(path, "w", encoding="utf-8") as f:
+    with open(path, "w") as f:
         f.write(code)
 
 
 def install_phase(phase, target_dir: str):
-    """
-    Supports:
-    - consensus phases
-    - module phases with run()
-    - legacy callable phases
-    """
-
-    # Consensus-aware phase
-    if hasattr(phase, "generate_candidates"):
-        from engine.phase_consensus import execute_consensus_phase
-
+    # 🧬 v2 mutation support
+    if hasattr(phase, "mutate"):
+        candidates = phase.mutate()
+        result = execute_consensus_phase(phase, candidates=candidates)
+    elif hasattr(phase, "generate_candidates"):
         result = execute_consensus_phase(phase)
-
-        code = result["selected_code"]
-        filename = getattr(phase, "output_file", "generated.py")
-
-        apply_code(target_dir, code, filename)
-
+    else:
+        phase(target_dir)
         return {
             "installed": True,
-            "mode": "consensus",
-            "consensus_receipt": result["consensus_receipt"],
+            "mode": "direct",
         }
 
-    # Module-based phase
-    if isinstance(phase, types.ModuleType) and hasattr(phase, "run"):
-        install_result = phase.run(target_dir)
+    code = result["selected_code"]
+    receipt = result["consensus_receipt"]
 
-        if isinstance(install_result, dict):
-            return {
-                "installed": True,
-                "mode": "module",
-                **install_result,
-            }
+    filename = getattr(phase, "output_file", "generated.py")
 
-        return {
-            "installed": True,
-            "mode": "module",
-        }
+    apply_code(target_dir, code, filename)
 
-    # Legacy callable phase
-    if callable(phase):
-        install_result = phase(target_dir)
+    # score + registry
+    score = score_phase({"valid": True}, receipt)
+    save_best_phase(target_dir, phase.__name__, code, score)
 
-        if isinstance(install_result, dict):
-            return {
-                "installed": True,
-                "mode": "function",
-                **install_result,
-            }
-
-        return {
-            "installed": True,
-            "mode": "function",
-        }
-
-    raise TypeError(
-        f"Invalid phase type: {type(phase)}. "
-        f"Expected module with run(), consensus phase, or callable."
-    )
+    return {
+        "installed": True,
+        "mode": "consensus",
+        "consensus_receipt": receipt,
+        "score": score,
+    }
