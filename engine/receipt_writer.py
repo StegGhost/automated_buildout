@@ -2,10 +2,28 @@ import json
 import hashlib
 import time
 from pathlib import Path
+from typing import List
 
 
 def _hash(data: dict) -> str:
     return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
+
+
+def load_existing_receipts(target_dir: str) -> List[dict]:
+    receipts_dir = Path(target_dir) / ".buildout_receipts"
+
+    if not receipts_dir.exists():
+        return []
+
+    receipts = []
+
+    for file in sorted(receipts_dir.glob("*.json")):
+        try:
+            receipts.append(json.loads(file.read_text()))
+        except Exception:
+            continue
+
+    return receipts
 
 
 def write_phase_receipt(
