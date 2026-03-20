@@ -1,11 +1,21 @@
-import os
+def run(target_dir: str):
+    import os
 
-def install(target_dir):
-    chain_file = os.path.join(target_dir, "chain.log")
+    chain_path = os.path.join(target_dir, "chain.log")
 
-    if not os.path.exists(chain_file):
-        with open(chain_file, "w") as f:
-            f.write("GENESIS\n")
+    with open(chain_path, "w", encoding="utf-8") as f:
+        f.write("chain initialized\n")
 
-def validate(target_dir):
-    return {"valid": True}
+    return {
+        "status": "ok",
+        "files_created": ["chain.log"],
+    }
+
+
+def validate(target_dir: str):
+    import os
+
+    path = os.path.join(target_dir, "chain.log")
+    return {
+        "valid": os.path.exists(path),
+    }
