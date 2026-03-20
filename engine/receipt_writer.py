@@ -45,3 +45,32 @@ def write_phase_receipt(
     payload["receipt_path"] = str(path)
 
     return payload
+
+
+def load_existing_receipts(target_dir: str):
+    receipts_dir = Path(target_dir) / ".buildout_receipts"
+
+    if not receipts_dir.exists():
+        return []
+
+    receipts = []
+
+    for file in receipts_dir.glob("*.json"):
+        with file.open() as f:
+            receipts.append(json.load(f))
+
+    # sort chronologically
+    receipts.sort(key=lambda x: x.get("timestamp", 0))
+
+    if not receipts:
+        return []
+
+    # ✅ isolate latest run
+    latest_ts = int(receipts[-1]["timestamp"])
+
+    filtered = [
+        r for r in receipts
+        if int(r.get("timestamp", 0)) == latest_ts
+    ]
+
+    return filtered
