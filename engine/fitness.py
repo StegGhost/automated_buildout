@@ -5,6 +5,6 @@ def score_phase(validation_result: dict, consensus_receipt: dict = None) -> floa
         score += 0.5
 
     if consensus_receipt:
-        score += consensus_receipt.get("agreement_ratio", 0) * 0.5
+        score += consensus_receipt.get("agreement_ratio", 0.0) * 0.5
 
     return score
