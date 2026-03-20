@@ -1,7 +1,7 @@
 import importlib
 import json
 from pathlib import Path
-from typing import List, Tuple, Any
+from typing import Any, List, Tuple
 
 
 DEFAULT_PHASES = [
@@ -42,6 +42,7 @@ def _is_valid_phase_module(mod: Any) -> bool:
     return (
         hasattr(mod, "run")
         or hasattr(mod, "generate_candidates")
+        or hasattr(mod, "mutate")
         or callable(mod)
     )
 
@@ -59,7 +60,7 @@ def load_phases(
         if not _is_valid_phase_module(mod):
             raise TypeError(
                 f"Invalid phase module '{phase_name}'. "
-                f"Expected one of: run(), generate_candidates(), or callable module."
+                f"Expected one of: run(), generate_candidates(), mutate(), or callable."
             )
 
         loaded.append(mod)
