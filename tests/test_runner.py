@@ -3,19 +3,18 @@ import sys
 
 sys.path.append(os.path.abspath("."))
 
-from engine.runner import run_build
+from engine.installer import install_phase
 from engine.receipt_writer import load_existing_receipts
+from engine.runner import run_build
 
 
 def test_buildout_runs():
     result = run_build("demo_target", "manifests/example_manifest.json")
 
     assert result["status"] == "success"
-    assert len(result["results"]) >= 1
-
-    for r in result["results"]:
-        assert r["valid"] is True
-        assert "receipt_hash" in r
+    assert result["health"]["health_score"] == 1.0
+    assert "replay_result" in result
+    assert result["replay_result"]["status"] == "ok"
 
 
 def test_phase_receipts_written():
@@ -28,6 +27,7 @@ def test_phase_receipts_written():
     for i in range(1, len(receipts)):
         assert receipts[i]["parent_hash"] == receipts[i - 1]["receipt_hash"]
 
+
 def test_consensus_phase():
     class MockPhase:
         output_file = "test.py"
@@ -38,8 +38,6 @@ def test_consensus_phase():
                 {"source": "claude", "code": "print('hello world')"},
                 {"source": "other", "code": "print('hi')"},
             ]
-
-    from engine.installer import install_phase
 
     result = install_phase(MockPhase(), "demo_target")
 
