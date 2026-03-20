@@ -2,9 +2,12 @@ from engine.planner import load_phases
 from engine.installer import install_phase
 from engine.validator import validate_phase
 from engine.receipt_writer import write_phase_receipt
+from engine.auto_upgrade import ensure_cge
 
 
 def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.json"):
+    ensure_cge()
+
     phases, manifest = load_phases(manifest_path)
 
     if target_dir is None:
@@ -12,11 +15,10 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
 
     results = []
     receipts = []
+    parent_hash = None
 
     for phase in phases:
-        name = phase.__name__
-
-        print(f"[BUILDOUT] Running phase: {name}")
+        name = getattr(phase, "__name__", str(phase))
 
         install_result = install_phase(phase, target_dir)
 
@@ -27,30 +29,27 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
             phase_name=name,
             install_result=install_result,
             validation_result=validation,
+            parent_hash=parent_hash,
         )
+
+        parent_hash = receipt["receipt_hash"]
         receipts.append(receipt)
 
-        phase_result = {
+        results.append({
             "phase": name,
             "valid": validation.get("valid", True),
-            "details": validation,
-            "install_result": install_result,
-            "receipt_hash": receipt["receipt_hash"],
-        }
-        results.append(phase_result)
+            "receipt_hash": parent_hash,
+        })
 
         if not validation.get("valid", True):
             return {
                 "status": "failed",
-                "phase": name,
-                "target_dir": target_dir,
                 "results": results,
                 "receipts": receipts,
             }
 
     return {
         "status": "success",
-        "target_dir": target_dir,
         "results": results,
         "receipts": receipts,
     }
