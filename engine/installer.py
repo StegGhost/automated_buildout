@@ -15,11 +15,11 @@ def install_phase(phase, target_dir: str):
     """
     Supports:
     - consensus phases
-    - module phases (with run function inside)
-    - callable phases
+    - module phases with run()
+    - legacy callable phases
     """
 
-    # 🔥 CONSENSUS MODE
+    # Consensus-aware phase
     if hasattr(phase, "generate_candidates"):
         from engine.phase_consensus import execute_consensus_phase
 
@@ -36,22 +36,39 @@ def install_phase(phase, target_dir: str):
             "consensus_receipt": result["consensus_receipt"],
         }
 
-    # 🔥 MODULE MODE (FIXED)
-    if isinstance(phase, types.ModuleType):
-        if hasattr(phase, "run"):
-            phase.run(target_dir)
-            return {"installed": True, "mode": "module"}
+    # Module-based phase
+    if isinstance(phase, types.ModuleType) and hasattr(phase, "run"):
+        install_result = phase.run(target_dir)
 
-        # 🔥 HANDLE nested module import case
-        for attr in dir(phase):
-            obj = getattr(phase, attr)
-            if callable(obj) and attr == "run":
-                obj(target_dir)
-                return {"installed": True, "mode": "module"}
+        if isinstance(install_result, dict):
+            return {
+                "installed": True,
+                "mode": "module",
+                **install_result,
+            }
 
-    # 🔥 FUNCTION MODE
+        return {
+            "installed": True,
+            "mode": "module",
+        }
+
+    # Legacy callable phase
     if callable(phase):
-        phase(target_dir)
-        return {"installed": True, "mode": "function"}
+        install_result = phase(target_dir)
 
-    raise TypeError(f"Invalid phase type: {type(phase)}")
+        if isinstance(install_result, dict):
+            return {
+                "installed": True,
+                "mode": "function",
+                **install_result,
+            }
+
+        return {
+            "installed": True,
+            "mode": "function",
+        }
+
+    raise TypeError(
+        f"Invalid phase type: {type(phase)}. "
+        f"Expected module with run(), consensus phase, or callable."
+    )
