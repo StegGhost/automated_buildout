@@ -32,15 +32,15 @@ jobs:
         run: pytest -q
 
       - name: Show consensus receipts
+        if: always()
         run: |
           echo "=== CONSENSUS ==="
-          cat demo_target/.buildout_receipts/*.json | grep consensus || true
+          grep -R "consensus_mode" demo_target/.buildout_receipts || true
 
       - name: Upload buildout receipts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: buildout-receipts
-          path: |
-            demo_target/.buildout_receipts
-          if-no-files-found: ignore
+          path: demo_target/.buildout_receipts/*.json
+          if-no-files-found: warn
