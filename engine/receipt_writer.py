@@ -42,7 +42,7 @@ def write_phase_receipt(
     target_dir: str,
     phase_name: str,
     install_result: Dict[str, Any],
-    validation: Dict[str, Any],
+    validation_result: Dict[str, Any],
 ) -> Dict[str, Any]:
     receipt_dir = ensure_receipt_dir(target_dir)
     parent_hash = get_chain_tip(target_dir)
@@ -52,7 +52,7 @@ def write_phase_receipt(
         "timestamp": time.time(),
         "phase": phase_name,
         "install_result": install_result,
-        "validation_result": validation,
+        "validation_result": validation_result,
         "parent_hash": parent_hash,
     }
 
