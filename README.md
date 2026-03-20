@@ -151,6 +151,23 @@ Where:
 -   per-phase receipts\
 -   rollback support
 
+## v1.1 capabilities
+
+- manifest-controlled phase selection
+- per-phase installation + validation
+- chained phase receipts
+- CI execution and artifact upload
+
+## Flow
+
+seed → receipts → chain → replay → invariants → consensus
+
+## Run locally
+
+```bash
+python run_buildout.py
+pytest -q
+
 ## v1.2
 
 -   CGE integration as phase\
