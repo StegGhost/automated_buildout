@@ -1,16 +1,22 @@
-import os
-import json
-import time
+def run(target_dir: str):
+    import os
+    import json
 
-def install(target_dir):
-    receipt_file = os.path.join(target_dir, "receipt.json")
+    receipt_path = os.path.join(target_dir, "receipt.json")
 
-    if not os.path.exists(receipt_file):
-        with open(receipt_file, "w") as f:
-            json.dump({
-                "created": time.time(),
-                "events": []
-            }, f)
+    with open(receipt_path, "w", encoding="utf-8") as f:
+        json.dump({"phase": "receipts", "status": "ok"}, f)
 
-def validate(target_dir):
-    return {"valid": True}
+    return {
+        "status": "ok",
+        "files_created": ["receipt.json"],
+    }
+
+
+def validate(target_dir: str):
+    import os
+
+    path = os.path.join(target_dir, "receipt.json")
+    return {
+        "valid": os.path.exists(path),
+    }
