@@ -1,10 +1,11 @@
-from engine.planner import load_phases
-from engine.installer import install_phase
-from engine.validator import validate_phase
-from engine.receipt_writer import write_phase_receipt
 from engine.auto_upgrade import ensure_cge
 from engine.build_health import compute_health
 from engine.graph_exporter import export_graph
+from engine.installer import install_phase
+from engine.planner import load_phases
+from engine.receipt_writer import write_phase_receipt
+from engine.replay import replay_build
+from engine.validator import validate_phase
 
 
 def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.json"):
@@ -36,11 +37,14 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
         parent_hash = receipt["receipt_hash"]
         receipts.append(receipt)
 
-        results.append({
-            "phase": name,
-            "valid": validation.get("valid", True),
-            "receipt_hash": parent_hash,
-        })
+        results.append(
+            {
+                "phase": name,
+                "valid": validation.get("valid", True),
+                "receipt_hash": parent_hash,
+                "install_result": install_result,
+            }
+        )
 
         if not validation.get("valid", True):
             return {
@@ -50,12 +54,15 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
                 "health": compute_health(results),
             }
 
-    export_graph(receipts, target_dir)
+    graph_path = export_graph(receipts, target_dir)
+    replay_result = replay_build(target_dir)
     health = compute_health(results)
 
     return {
         "status": "success",
         "results": results,
         "receipts": receipts,
+        "graph_path": graph_path,
+        "replay_result": replay_result,
         "health": health,
     }
