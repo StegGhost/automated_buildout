@@ -1,13 +1,21 @@
-import os
+def run(target_dir: str):
+    import os
 
-def install(target_dir):
     os.makedirs(target_dir, exist_ok=True)
 
+    with open(os.path.join(target_dir, "app.py"), "w", encoding="utf-8") as f:
+        f.write("print('hello from seed phase')\n")
+
+    return {
+        "status": "ok",
+        "files_created": ["app.py"],
+    }
+
+
+def validate(target_dir: str):
+    import os
+
     path = os.path.join(target_dir, "app.py")
-
-    if not os.path.exists(path):
-        with open(path, "w") as f:
-            f.write("print('hello world')\n")
-
-def validate(target_dir):
-    return {"valid": True}
+    return {
+        "valid": os.path.exists(path),
+    }
