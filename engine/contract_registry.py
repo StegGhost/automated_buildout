@@ -17,6 +17,7 @@ def validate_contracts():
         except Exception as e:
             failures.append({
                 "module": module_path,
+                "reason": "module_import_error",
                 "error": str(e),
             })
             continue
@@ -25,6 +26,7 @@ def validate_contracts():
             if not hasattr(module, fn):
                 failures.append({
                     "module": module_path,
+                    "reason": "missing_contract_function",
                     "missing": fn,
                 })
 
