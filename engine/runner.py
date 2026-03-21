@@ -8,17 +8,23 @@ from engine.replay import replay_build, load_previous_run_receipts
 from engine.run_context import create_run_id, ensure_run_dir
 from engine.migration_validator import validate_migration
 from engine.successor_proof import generate_successor_proof
+from engine.self_healer import attempt_contract_repair
+from engine.fallback_executor import execute_with_fallback
 
 
 def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.json"):
     ensure_cge()
 
-    # 🔥 NEW: pre-run migration validation
+    # 🔥 Self-healing attempt BEFORE validation
+    repair_attempt = attempt_contract_repair()
+
     migration = validate_migration()
+
     if not migration["valid"]:
         return {
             "status": "failed",
             "reason": "migration_invalid",
+            "repair_attempt": repair_attempt,
             "details": migration,
         }
 
@@ -39,7 +45,12 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
     for phase in phases:
         name = getattr(phase, "__name__", str(phase))
 
-        install_result = install_phase(phase, target_dir)
+        # 🔥 Try normal install first
+        try:
+            install_result = install_phase(phase, target_dir)
+        except Exception:
+            install_result = execute_with_fallback(phase, target_dir)
+
         validation = validate_phase(phase, target_dir)
 
         receipt = write_phase_receipt(
@@ -68,7 +79,6 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
 
     health = compute_health(results)
     replay_result = replay_build(receipts)
-
     previous_receipts = load_previous_run_receipts(target_dir, run_id)
 
     successor_proof = generate_successor_proof(
@@ -85,5 +95,6 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
         "replay_result": replay_result,
         "run_id": run_id,
         "migration": migration,
+        "repair_attempt": repair_attempt,
         "successor_proof": successor_proof,
     }
