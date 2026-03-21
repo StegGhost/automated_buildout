@@ -1,29 +1,40 @@
 import traceback
-from typing import List, Dict, Any
 
 from engine.variant_memory import record_variant_result, get_variant_bias
 from engine.variant_policy import pick_variant
 from engine.variant_generator import generate_variants
+from engine.constraints import evaluate_constraints
+from engine.test_runner import run_unit_tests
 
 
-def execute_variants(phase, variants: List[Dict[str, Any]], target_dir, phase_name, install_phase, validate_phase):
+def execute_variants(phase, variants, target_dir, phase_name, install_phase, validate_phase):
     bias = get_variant_bias(target_dir, phase_name)
 
-    # 🔥 LLM-guided generation
     generated = generate_variants(phase, variants, max_new=2)
     all_variants = variants + generated
 
-    results: List[Dict[str, Any]] = []
+    results = []
 
     for variant in all_variants:
         name = variant.get("name")
         fn = variant.get("callable")
 
+        error = None
+
         try:
             install_result = install_phase(fn, target_dir)
             validation = validate_phase(fn, target_dir)
 
-            base_score = 1.0 if validation.get("valid", True) else 0.0
+            # 🔥 NEW: run unit tests
+            test_result = run_unit_tests(fn, target_dir)
+
+            if not test_result["passed"]:
+                error = test_result["error"]
+
+            # 🔥 constraints evaluation
+            constraint_eval = evaluate_constraints(validation, error)
+
+            base_score = 1.0 if constraint_eval["passed"] else 0.0
             bias_score = bias.get(name, 0.0)
 
             final_score = base_score + (0.25 * bias_score)
@@ -33,11 +44,13 @@ def execute_variants(phase, variants: List[Dict[str, Any]], target_dir, phase_na
                 "callable": fn,
                 "install_result": install_result,
                 "validation": validation,
+                "tests": test_result,
+                "constraints": constraint_eval,
                 "score": final_score,
                 "base_score": base_score,
                 "bias_score": bias_score,
                 "generated": variant.get("generated", False),
-                "error": None,
+                "error": error,
             }
 
             results.append(result)
@@ -50,6 +63,8 @@ def execute_variants(phase, variants: List[Dict[str, Any]], target_dir, phase_na
                 "callable": fn,
                 "install_result": {"status": "error"},
                 "validation": {"valid": False},
+                "tests": {"passed": False},
+                "constraints": {"passed": False, "violations": ["execution_failure"]},
                 "score": 0.0,
                 "base_score": 0.0,
                 "bias_score": 0.0,
@@ -57,6 +72,13 @@ def execute_variants(phase, variants: List[Dict[str, Any]], target_dir, phase_na
                 "error": traceback.format_exc(),
             })
 
-    selected = pick_variant(results)
+    # 🔥 filter invalid variants BEFORE selection
+    valid_results = [r for r in results if r["constraints"]["passed"]]
+
+    if not valid_results:
+        # fallback: choose best of all (even invalid)
+        selected = pick_variant(results)
+    else:
+        selected = pick_variant(valid_results)
 
     return results, selected
