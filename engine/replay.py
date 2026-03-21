@@ -11,33 +11,11 @@ def load_run_receipts(target_dir: str, run_id: str):
     receipts = []
 
     for file in base.glob("*.json"):
-        with file.open() as f:
+        with file.open("r") as f:
             receipts.append(json.load(f))
 
     receipts.sort(key=lambda x: x.get("timestamp", 0))
-
     return receipts
-
-
-def load_previous_run_receipts(target_dir: str, current_run_id: str):
-    base = Path(target_dir) / ".buildout_receipts"
-
-    if not base.exists():
-        return []
-
-    runs = sorted([p.name for p in base.iterdir() if p.is_dir()])
-
-    if current_run_id not in runs:
-        return []
-
-    idx = runs.index(current_run_id)
-
-    if idx == 0:
-        return []
-
-    prev_run = runs[idx - 1]
-
-    return load_run_receipts(target_dir, prev_run)
 
 
 def replay_build(receipts: list):
