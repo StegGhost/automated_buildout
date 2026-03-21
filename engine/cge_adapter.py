@@ -10,10 +10,20 @@ def _hash(data) -> str:
 
 
 def build_canonical_run_receipt(run_result: dict):
-    canonical = {
-        "schema": "cge.canonical.v1",
-        "run_id": run_result.get("run_id"),
-        "parent_run_id": run_result.get("parent_run_id"),
+    """
+    Canonical run receipt with TWO identities:
+
+    1. state_hash
+       - stable across equivalent runs
+       - used for idempotency / replay detection
+
+    2. canonical_hash
+       - includes run metadata
+       - used for full CGE-style canonical receipt identity
+    """
+
+    state_payload = {
+        "schema": "cge.state.v1",
         "status": run_result.get("status"),
         "health": run_result.get("health"),
         "replay_result": run_result.get("replay_result"),
@@ -27,7 +37,18 @@ def build_canonical_run_receipt(run_result: dict):
         ],
     }
 
+    state_hash = _hash(state_payload)
+
+    canonical = {
+        "schema": "cge.canonical.v1",
+        "run_id": run_result.get("run_id"),
+        "parent_run_id": run_result.get("parent_run_id"),
+        "state_hash": state_hash,
+        "state": state_payload,
+    }
+
     canonical["canonical_hash"] = _hash(canonical)
+
     return canonical
 
 
@@ -53,7 +74,9 @@ def compute_merkle_root(receipts: list):
         for i in range(0, len(hashes), 2):
             left = hashes[i]
             right = hashes[i + 1] if i + 1 < len(hashes) else left
-            next_level.append(hashlib.sha256((left + right).encode("utf-8")).hexdigest())
+            next_level.append(
+                hashlib.sha256((left + right).encode("utf-8")).hexdigest()
+            )
 
         hashes = next_level
 
