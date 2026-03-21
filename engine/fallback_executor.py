@@ -1,19 +1,22 @@
 def execute_with_fallback(phase, target_dir):
-    """
-    Executes a phase with a fallback mechanism.
-    """
-
     try:
         if hasattr(phase, "run"):
-            return phase.run(target_dir)
+            result = phase.run(target_dir)
+            if isinstance(result, dict):
+                return result
+            return {"status": "ok", "mode": "fallback"}
 
         if callable(phase):
-            return phase(target_dir)
+            result = phase(target_dir)
+            if isinstance(result, dict):
+                return result
+            return {"status": "ok", "mode": "fallback"}
 
-        return {"status": "unknown_phase_type"}
+        return {"status": "unknown_phase_type", "mode": "fallback"}
 
     except Exception as e:
         return {
             "status": "failed",
+            "mode": "fallback",
             "error": str(e),
         }
