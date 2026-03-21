@@ -18,7 +18,7 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
     if target_dir is None:
         target_dir = manifest["target_dir"]
 
-    # 🔁 idempotency check
+    # idempotency
     existing_receipts = load_existing_receipts(target_dir)
 
     if existing_receipts:
@@ -36,7 +36,6 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
                 "replay_result": replay_result,
             }
 
-    # 🔒 lock
     lock = acquire_lock(target_dir)
     if not lock.get("acquired"):
         return {"status": "locked"}
@@ -51,16 +50,11 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
         for phase in phases:
             name = getattr(phase, "__name__", str(phase))
 
-            # 🔥 NEW: detect variants
-            phase_variants = None
-
             if hasattr(phase, "variants"):
-                phase_variants = phase.variants()
-
-            if phase_variants:
                 variant_results = execute_variants(
-                    phase_variants,
+                    phase.variants(),
                     target_dir,
+                    name,
                     install_phase,
                     validate_phase,
                 )
@@ -86,7 +80,6 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
                 parent_hash,
             )
 
-            # 🔥 enrich receipt
             receipt["selected_variant"] = selected_variant
             receipt["variant_score"] = variant_score
 
