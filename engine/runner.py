@@ -13,6 +13,8 @@ from engine.replay import replay_build
 from engine.merkle import build_merkle_tree
 from engine.run_registry import load_registry, save_registry
 from engine.run_meta import write_run_meta
+from engine.phase_registry import load_phase_registry, save_phase_registry
+from engine.phase_signature import hash_phase_signature
 
 
 def _hash_manifest(manifest: dict) -> str:
@@ -36,6 +38,8 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
     runs_dir.mkdir(parents=True, exist_ok=True)
 
     registry = load_registry(target_dir)
+    phase_registry = load_phase_registry(target_dir)
+
     manifest_hash = _hash_manifest(manifest)
 
     # full-build idempotency gate
@@ -63,9 +67,21 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
 
     for phase in phases:
         name = getattr(phase, "__name__", str(phase))
+        phase_sig = hash_phase_signature(name, manifest)
 
-        install_result = install_phase(phase, target_dir)
-        validation = validate_phase(phase, target_dir)
+        prior = phase_registry.get(name)
+        phase_replayed = prior is not None and prior.get("signature") == phase_sig
+
+        if phase_replayed:
+            install_result = {
+                "installed": True,
+                "status": "replayed",
+                "mode": "phase_replay",
+            }
+            validation = {"valid": True, "replayed": True}
+        else:
+            install_result = install_phase(phase, target_dir)
+            validation = validate_phase(phase, target_dir)
 
         receipt = write_phase_receipt(
             target_dir=target_dir,
@@ -80,11 +96,20 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
         receipts.append(receipt)
 
         valid = validation.get("valid", True)
+
         results.append({
             "phase": name,
             "valid": valid,
             "receipt_hash": parent_hash,
+            "replayed": phase_replayed,
         })
+
+        if valid:
+            phase_registry[name] = {
+                "signature": phase_sig,
+                "last_run_id": run_id,
+                "receipt_hash": parent_hash,
+            }
 
         if not valid:
             failed = True
@@ -112,6 +137,7 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
             "runs": len(registry) + 1,
         }
         save_registry(target_dir, registry)
+        save_phase_registry(target_dir, phase_registry)
 
     return {
         "status": "failed" if failed else "success",
