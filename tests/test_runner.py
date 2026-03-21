@@ -1,5 +1,6 @@
 from engine.runner import run_build
 from engine.replay import load_run_receipts
+from engine.auto_patcher import select_patch_for_failure
 
 
 def test_buildout_runs():
@@ -24,3 +25,16 @@ def test_phase_receipts_written():
 
     for i in range(1, len(receipts)):
         assert receipts[i]["parent_hash"] == receipts[i - 1]["receipt_hash"]
+
+
+def test_variant_selection():
+    failure = {
+        "module": "engine.receipt_writer",
+        "reason": "missing_contract_function",
+        "missing": "write_phase_receipt",
+    }
+
+    selection = select_patch_for_failure(failure)
+
+    assert selection["selected"] is not None
+    assert selection["selected"]["target_file"] == "engine/receipt_writer.py"
