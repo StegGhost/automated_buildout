@@ -7,10 +7,8 @@ MEMORY_FILE = ".buildout_memory/variants.json"
 
 def _load_memory(target_dir):
     path = Path(target_dir) / MEMORY_FILE
-
     if not path.exists():
         return {}
-
     with path.open() as f:
         return json.load(f)
 
@@ -18,7 +16,6 @@ def _load_memory(target_dir):
 def _save_memory(target_dir, data):
     path = Path(target_dir) / MEMORY_FILE
     path.parent.mkdir(parents=True, exist_ok=True)
-
     with path.open("w") as f:
         json.dump(data, f, indent=2)
 
@@ -45,15 +42,12 @@ def record_variant_result(target_dir, phase_name, variant_name, score):
 
 def get_variant_bias(target_dir, phase_name):
     memory = _load_memory(target_dir)
-
     phase_mem = memory.get(phase_name, {})
 
     scores = {}
-
     for variant, stats in phase_mem.items():
         attempts = stats.get("attempts", 1)
         total = stats.get("score_total", 0.0)
-
         scores[variant] = total / attempts
 
     return scores
