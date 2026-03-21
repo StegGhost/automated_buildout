@@ -11,26 +11,17 @@ from engine.auto_upgrade import ensure_cge
 from engine.build_health import compute_health
 from engine.replay import replay_build
 from engine.merkle import build_merkle_tree
+from engine.run_registry import load_registry, save_registry
+from engine.run_meta import write_run_meta
 
 
 def _hash_manifest(manifest: dict) -> str:
-    payload = json.dumps(manifest, sort_keys=True).encode()
+    payload = json.dumps(manifest, sort_keys=True).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
 
 
-def _canonical_registry_path(target_dir: str) -> Path:
-    return Path(target_dir) / ".buildout_registry.json"
-
-
-def _load_registry(path: Path):
-    if not path.exists():
-        return {}
-    return json.loads(path.read_text())
-
-
-def _save_registry(path: Path, data: dict):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2))
+def _runs_dir(target_dir: str) -> Path:
+    return Path(target_dir) / ".buildout_runs"
 
 
 def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.json"):
@@ -41,27 +32,32 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
     if target_dir is None:
         target_dir = manifest["target_dir"]
 
-    registry_path = _canonical_registry_path(target_dir)
-    registry = _load_registry(registry_path)
+    runs_dir = _runs_dir(target_dir)
+    runs_dir.mkdir(parents=True, exist_ok=True)
 
+    registry = load_registry(target_dir)
     manifest_hash = _hash_manifest(manifest)
 
-    # idempotency pre-check
-    if manifest_hash in registry:
+    # full-build idempotency gate
+    existing = registry.get(manifest_hash)
+    if existing:
         return {
             "status": "replayed",
             "canonical_hash": manifest_hash,
             "results": [],
+            "receipts": [],
             "health": {"health_score": 1.0, "total_phases": 0, "passed": 0},
             "replay_result": {"status": "ok"},
+            "merkle": None,
+            "run_id": existing.get("run_id"),
         }
 
-    # required by receipt_writer
     run_id = str(uuid.uuid4())
+    run_dir = runs_dir / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
 
     results = []
     receipts = []
-
     parent_hash = None
     failed = False
 
@@ -84,7 +80,6 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
         receipts.append(receipt)
 
         valid = validation.get("valid", True)
-
         results.append({
             "phase": name,
             "valid": valid,
@@ -97,15 +92,26 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
 
     health = compute_health(results)
     replay_result = replay_build(receipts)
+    merkle = build_merkle_tree(receipts, run_dir)
+
+    write_run_meta(
+        run_dir,
+        {
+            "run_id": run_id,
+            "manifest_path": manifest_path,
+            "manifest_hash": manifest_hash,
+            "status": "failed" if failed else "success",
+            "phase_count": len(results),
+            "receipt_count": len(receipts),
+        },
+    )
 
     if not failed:
         registry[manifest_hash] = {
-            "runs": len(registry) + 1,
             "run_id": run_id,
+            "runs": len(registry) + 1,
         }
-        _save_registry(registry_path, registry)
-
-    merkle = build_merkle_tree(receipts, Path(target_dir) / ".buildout_runs" / run_id)
+        save_registry(target_dir, registry)
 
     return {
         "status": "failed" if failed else "success",
