@@ -45,15 +45,37 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
 
     manifest_hash = _hash_manifest(manifest)
 
-    # idempotency
+    # ✅ IDEMPOTENT REPLAY (FIXED — FULL CONTRACT RETURN)
     existing = registry.get(manifest_hash)
     if existing:
+        previous_root = load_latest_root(target_dir)
+
         return {
             "status": "replayed",
             "canonical_hash": manifest_hash,
             "run_id": existing.get("run_id"),
+            "results": [],
+            "receipts": [],
+            "health": {
+                "health_score": 1.0,
+                "total_phases": 0,
+                "passed": 0,
+            },
+            "replay_result": {
+                "status": "ok",
+                "total": 0,
+            },
+            "merkle": {
+                "root": None,
+                "leaf_count": 0,
+            },
+            "cge": {
+                "global_root": previous_root,
+                "object_count": 0,
+            },
         }
 
+    # --- NEW RUN ---
     run_id = str(uuid.uuid4())
     run_dir = runs_dir / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -93,6 +115,7 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
             failed = True
             break
 
+    # --- POST BUILD ---
     health = compute_health(results)
     replay_result = replay_build(receipts)
     merkle = build_merkle_tree(receipts, run_dir)
@@ -105,13 +128,12 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
         "health": health,
     }
 
-    # 🔥 CGE EXPORT
+    # ✅ CGE EXPORT
     previous_root = load_latest_root(target_dir)
-
     cge_result = export_run_to_cge(target_dir, run_result, previous_root)
-
     save_latest_root(target_dir, cge_result["global_root"])
 
+    # --- META ---
     write_run_meta(
         run_dir,
         {
@@ -121,6 +143,7 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
         },
     )
 
+    # --- REGISTRY UPDATE ---
     if not failed:
         registry[manifest_hash] = {
             "run_id": run_id,
@@ -129,6 +152,7 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
         save_registry(target_dir, registry)
         save_phase_registry(target_dir, phase_registry)
 
+    # --- FINAL RETURN ---
     return {
         **run_result,
         "cge": cge_result,
