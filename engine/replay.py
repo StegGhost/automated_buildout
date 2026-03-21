@@ -1,24 +1,9 @@
-import json
-from pathlib import Path
+from engine.receipt_loader import load_run_receipts
 
 
-def load_run_receipts(target_dir: str, run_id: str):
-    base = Path(target_dir) / ".buildout_receipts" / run_id
+def replay_build(target_dir: str, run_id: str):
+    receipts = load_run_receipts(target_dir, run_id)
 
-    if not base.exists():
-        return []
-
-    receipts = []
-
-    for file in base.glob("*.json"):
-        with file.open("r") as f:
-            receipts.append(json.load(f))
-
-    receipts.sort(key=lambda x: x.get("timestamp", 0))
-    return receipts
-
-
-def replay_build(receipts: list):
     if not receipts:
         return {"status": "empty"}
 
@@ -33,4 +18,4 @@ def replay_build(receipts: list):
                 "index": i,
             }
 
-    return {"status": "ok"}
+    return {"status": "ok", "total": len(receipts)}
