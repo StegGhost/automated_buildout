@@ -1,28 +1,28 @@
-import json
-from pathlib import Path
+existing = registry.get(manifest_hash)
+if existing:
+    previous_root = load_latest_root(target_dir)
 
-
-def load_canonical(target_dir: str, run_id: str):
-    path = Path(target_dir) / ".buildout_runs" / run_id / "canonical_receipt.json"
-
-    if not path.exists():
-        return None
-
-    with path.open("r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-def detect_replay(target_dir: str, current_run_id: str, prev_run_id: str | None):
-    """
-    Replay detection compares stable state identity only.
-    """
-    if not prev_run_id:
-        return False
-
-    current = load_canonical(target_dir, current_run_id)
-    previous = load_canonical(target_dir, prev_run_id)
-
-    if not current or not previous:
-        return False
-
-    return current.get("state_hash") == previous.get("state_hash")
+    return {
+        "status": "replayed",
+        "canonical_hash": manifest_hash,
+        "run_id": existing.get("run_id"),
+        "results": [],
+        "receipts": [],
+        "health": {
+            "health_score": 1.0,
+            "total_phases": 0,
+            "passed": 0,
+        },
+        "replay_result": {
+            "status": "ok",
+            "total": 0,
+        },
+        "merkle": {
+            "root": None,
+            "leaf_count": 0,
+        },
+        "cge": {
+            "global_root": previous_root,
+            "object_count": 0,
+        },
+    }
