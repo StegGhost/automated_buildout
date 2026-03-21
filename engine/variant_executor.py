@@ -1,5 +1,6 @@
 import traceback
 from engine.variant_memory import record_variant_result, get_variant_bias
+from engine.variant_policy import pick_variant
 
 
 def execute_variants(variants, target_dir, phase_name, install_phase, validate_phase):
@@ -16,12 +17,11 @@ def execute_variants(variants, target_dir, phase_name, install_phase, validate_p
             validation = validate_phase(fn, target_dir)
 
             base_score = 1.0 if validation.get("valid", True) else 0.0
-
-            # 🔥 APPLY LEARNING BIAS
             bias_score = bias.get(name, 0.0)
+
             final_score = base_score + (0.25 * bias_score)
 
-            results.append({
+            result = {
                 "variant": name,
                 "callable": fn,
                 "install_result": install_result,
@@ -30,9 +30,11 @@ def execute_variants(variants, target_dir, phase_name, install_phase, validate_p
                 "base_score": base_score,
                 "bias_score": bias_score,
                 "error": None,
-            })
+            }
 
-            # 🔥 record outcome
+            results.append(result)
+
+            # record learning
             record_variant_result(target_dir, phase_name, name, base_score)
 
         except Exception:
@@ -47,9 +49,7 @@ def execute_variants(variants, target_dir, phase_name, install_phase, validate_p
                 "error": traceback.format_exc(),
             })
 
-    return results
+    # 🔥 NEW: exploration vs exploitation selection
+    selected = pick_variant(results)
 
-
-def select_best_variant(results):
-    results.sort(key=lambda x: x["score"], reverse=True)
-    return results[0]
+    return results, selected
