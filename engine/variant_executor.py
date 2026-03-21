@@ -1,14 +1,19 @@
 import traceback
 from engine.variant_memory import record_variant_result, get_variant_bias
 from engine.variant_policy import pick_variant
+from engine.variant_generator import generate_variants
 
 
 def execute_variants(variants, target_dir, phase_name, install_phase, validate_phase):
     bias = get_variant_bias(target_dir, phase_name)
 
+    # 🔥 NEW: generate additional variants
+    generated = generate_variants(type("P", (), {"variants": lambda: variants}))
+    all_variants = variants + generated
+
     results = []
 
-    for variant in variants:
+    for variant in all_variants:
         name = variant.get("name")
         fn = variant.get("callable")
 
@@ -34,7 +39,6 @@ def execute_variants(variants, target_dir, phase_name, install_phase, validate_p
 
             results.append(result)
 
-            # record learning
             record_variant_result(target_dir, phase_name, name, base_score)
 
         except Exception:
@@ -49,7 +53,6 @@ def execute_variants(variants, target_dir, phase_name, install_phase, validate_p
                 "error": traceback.format_exc(),
             })
 
-    # 🔥 NEW: exploration vs exploitation selection
     selected = pick_variant(results)
 
     return results, selected
