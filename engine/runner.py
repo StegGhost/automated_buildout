@@ -5,6 +5,7 @@ from engine.receipt_writer import write_phase_receipt
 from engine.auto_upgrade import ensure_cge
 from engine.build_health import compute_health
 from engine.replay import replay_build
+from engine.run_context import create_run_id, ensure_run_dir
 
 
 def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.json"):
@@ -14,6 +15,10 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
 
     if target_dir is None:
         target_dir = manifest["target_dir"]
+
+    # 🔥 NEW: isolate run
+    run_id = create_run_id()
+    ensure_run_dir(target_dir, run_id)
 
     results = []
     receipts = []
@@ -33,6 +38,7 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
             install_result=install_result,
             validation_result=validation,
             parent_hash=parent_hash,
+            run_id=run_id,
         )
 
         parent_hash = receipt["receipt_hash"]
@@ -59,4 +65,5 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
         "receipts": receipts,
         "health": health,
         "replay_result": replay_result,
+        "run_id": run_id,  # 🔥 CRITICAL
     }
