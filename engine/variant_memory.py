@@ -31,6 +31,7 @@ def record_variant_result(target_dir, phase_name, variant_name, score):
         "wins": 0,
         "attempts": 0,
         "score_total": 0.0,
+        "generated": "_gen" in variant_name,
     })
 
     variant_mem["attempts"] += 1
