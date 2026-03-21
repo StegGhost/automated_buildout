@@ -9,38 +9,51 @@ def _hash(data) -> str:
     ).hexdigest()
 
 
+def _stable_receipt_view(receipt: dict):
+    """
+    Build a stable, replay-safe view of a receipt.
+
+    Excludes run-specific / time-specific / path-specific identity:
+    - run_id
+    - timestamp
+    - receipt_hash
+    - receipt_path
+    - parent_hash
+    """
+    return {
+        "phase": receipt.get("phase"),
+        "install_result": receipt.get("install_result"),
+        "validation_result": receipt.get("validation_result"),
+    }
+
+
 def build_canonical_run_receipt(run_result: dict):
     """
     Canonical run receipt with TWO identities:
 
     1. state_hash
        - stable across equivalent runs
-       - used for idempotency / replay detection
+       - used for replay / idempotency detection
 
     2. canonical_hash
+       - full canonical receipt identity
        - includes run metadata
-       - used for full CGE-style canonical receipt identity
     """
 
+    receipts = run_result.get("receipts", [])
+
     state_payload = {
-        "schema": "cge.state.v1",
+        "schema": "cge.state.v2",
         "status": run_result.get("status"),
         "health": run_result.get("health"),
         "replay_result": run_result.get("replay_result"),
-        "phases": [
-            {
-                "phase": r.get("phase"),
-                "valid": r.get("valid"),
-                "receipt_hash": r.get("receipt_hash"),
-            }
-            for r in run_result.get("results", [])
-        ],
+        "phases": [_stable_receipt_view(r) for r in receipts],
     }
 
     state_hash = _hash(state_payload)
 
     canonical = {
-        "schema": "cge.canonical.v1",
+        "schema": "cge.canonical.v2",
         "run_id": run_result.get("run_id"),
         "parent_run_id": run_result.get("parent_run_id"),
         "state_hash": state_hash,
