@@ -61,7 +61,7 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
             install_result=install_result,
             validation_result=validation,
             parent_hash=parent_hash,
-            run_id=run_id,  # ✅ FIXED
+            run_id=run_id,
         )
 
         parent_hash = receipt["receipt_hash"]
@@ -79,16 +79,13 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
             failed = True
             break
 
-    # health
     health = compute_health(results)
 
-    # replay
-    replay_result = replay_build(receipts)
+    # FIXED: replay is now run-scoped
+    replay_result = replay_build(target_dir, run_id)
 
-    # merkle
     merkle = build_merkle_tree(receipts, run_dir)
 
-    # canonical receipt
     canonical = {
         "receipt_hash": parent_hash,
         "run_id": run_id,
@@ -99,7 +96,6 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
         json.dumps(canonical, indent=2)
     )
 
-    # diff vs previous run
     diff_result = None
     if previous_run_dir and previous_run_dir.exists():
         diff_result = compare_runs(previous_run_dir, run_dir)
@@ -116,4 +112,5 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
         "replay_result": replay_result,
         "merkle": merkle,
         "diff_result": diff_result,
+        "run_id": run_id,
     }
