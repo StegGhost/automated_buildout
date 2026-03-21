@@ -1,5 +1,6 @@
 import uuid
 from pathlib import Path
+import json
 
 from engine.planner import load_phases
 from engine.installer import install_phase
@@ -60,6 +61,7 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
             install_result=install_result,
             validation_result=validation,
             parent_hash=parent_hash,
+            run_id=run_id,  # ✅ FIXED
         )
 
         parent_hash = receipt["receipt_hash"]
@@ -94,7 +96,7 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
     }
 
     (run_dir / "canonical_receipt.json").write_text(
-        __import__("json").dumps(canonical, indent=2)
+        json.dumps(canonical, indent=2)
     )
 
     # diff vs previous run
@@ -103,7 +105,7 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
         diff_result = compare_runs(previous_run_dir, run_dir)
 
         (run_dir / "diff_report.json").write_text(
-            __import__("json").dumps(diff_result, indent=2)
+            json.dumps(diff_result, indent=2)
         )
 
     return {
