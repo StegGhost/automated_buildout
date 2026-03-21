@@ -1,17 +1,19 @@
 import traceback
+from typing import List, Dict, Any
+
 from engine.variant_memory import record_variant_result, get_variant_bias
 from engine.variant_policy import pick_variant
 from engine.variant_generator import generate_variants
 
 
-def execute_variants(variants, target_dir, phase_name, install_phase, validate_phase):
+def execute_variants(phase, variants: List[Dict[str, Any]], target_dir, phase_name, install_phase, validate_phase):
     bias = get_variant_bias(target_dir, phase_name)
 
-    # 🔥 NEW: generate additional variants
-    generated = generate_variants(type("P", (), {"variants": lambda: variants}))
+    # 🔥 LLM-guided generation
+    generated = generate_variants(phase, variants, max_new=2)
     all_variants = variants + generated
 
-    results = []
+    results: List[Dict[str, Any]] = []
 
     for variant in all_variants:
         name = variant.get("name")
@@ -34,6 +36,7 @@ def execute_variants(variants, target_dir, phase_name, install_phase, validate_p
                 "score": final_score,
                 "base_score": base_score,
                 "bias_score": bias_score,
+                "generated": variant.get("generated", False),
                 "error": None,
             }
 
@@ -50,6 +53,7 @@ def execute_variants(variants, target_dir, phase_name, install_phase, validate_p
                 "score": 0.0,
                 "base_score": 0.0,
                 "bias_score": 0.0,
+                "generated": variant.get("generated", False),
                 "error": traceback.format_exc(),
             })
 
