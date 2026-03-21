@@ -1,112 +1,44 @@
-import json
-import hashlib
-from pathlib import Path
+from engine.cge_store import store_object, write_root
+from engine.cge_chain import link_roots
 
 
-def _hash(data) -> str:
-    return hashlib.sha256(
-        json.dumps(data, sort_keys=True).encode("utf-8")
-    ).hexdigest()
-
-
-def _stable_receipt_view(receipt: dict):
+def export_run_to_cge(target_dir: str, run_result: dict, previous_root: str | None):
     """
-    Build a stable, replay-safe view of a receipt.
-
-    Excludes run-specific / time-specific / path-specific identity:
-    - run_id
-    - timestamp
-    - receipt_hash
-    - receipt_path
-    - parent_hash
-    """
-    return {
-        "phase": receipt.get("phase"),
-        "install_result": receipt.get("install_result"),
-        "validation_result": receipt.get("validation_result"),
-    }
-
-
-def build_canonical_run_receipt(run_result: dict):
-    """
-    Canonical run receipt with TWO identities:
-
-    1. state_hash
-       - stable across equivalent runs
-       - used for replay / idempotency detection
-
-    2. canonical_hash
-       - full canonical receipt identity
-       - includes run metadata
+    Convert run_result → CGE canonical objects
     """
 
-    receipts = run_result.get("receipts", [])
+    objects = []
 
-    state_payload = {
-        "schema": "cge.state.v2",
-        "status": run_result.get("status"),
-        "health": run_result.get("health"),
-        "replay_result": run_result.get("replay_result"),
-        "phases": [_stable_receipt_view(r) for r in receipts],
-    }
+    # store each receipt
+    for r in run_result.get("receipts", []):
+        h = store_object(target_dir, r)
+        objects.append(h)
 
-    state_hash = _hash(state_payload)
-
-    canonical = {
-        "schema": "cge.canonical.v2",
+    # build root payload
+    root_payload = {
         "run_id": run_result.get("run_id"),
-        "parent_run_id": run_result.get("parent_run_id"),
-        "state_hash": state_hash,
-        "state": state_payload,
+        "status": run_result.get("status"),
+        "objects": objects,
+        "health": run_result.get("health"),
     }
 
-    canonical["canonical_hash"] = _hash(canonical)
+    root_hash = store_object(target_dir, root_payload)
 
-    return canonical
+    # link chain
+    global_root = link_roots(previous_root, root_hash)
 
+    write_root(
+        target_dir,
+        global_root,
+        {
+            "root": root_hash,
+            "prev": previous_root,
+            "global_root": global_root,
+        },
+    )
 
-def write_canonical_receipt(target_dir: str, run_id: str, canonical: dict):
-    path = Path(target_dir) / ".buildout_runs" / run_id / "canonical_receipt.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(canonical, f, indent=2, sort_keys=True)
-
-    return str(path)
-
-
-def compute_merkle_root(receipts: list):
-    hashes = [r["receipt_hash"] for r in receipts if "receipt_hash" in r]
-
-    if not hashes:
-        return None
-
-    while len(hashes) > 1:
-        next_level = []
-
-        for i in range(0, len(hashes), 2):
-            left = hashes[i]
-            right = hashes[i + 1] if i + 1 < len(hashes) else left
-            next_level.append(
-                hashlib.sha256((left + right).encode("utf-8")).hexdigest()
-            )
-
-        hashes = next_level
-
-    return hashes[0]
-
-
-def write_merkle_proof(target_dir: str, run_id: str, merkle_root: str):
-    path = Path(target_dir) / ".buildout_runs" / run_id / "merkle.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    payload = {
-        "schema": "cge.merkle.v1",
-        "run_id": run_id,
-        "root": merkle_root,
+    return {
+        "root_hash": root_hash,
+        "global_root": global_root,
+        "object_count": len(objects),
     }
-
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(payload, f, indent=2, sort_keys=True)
-
-    return str(path)
