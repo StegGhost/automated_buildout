@@ -4,6 +4,7 @@ from engine.validator import validate_phase
 from engine.receipt_writer import write_phase_receipt
 from engine.auto_upgrade import ensure_cge
 from engine.build_health import compute_health
+from engine.replay import replay_build
 
 
 def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.json"):
@@ -49,12 +50,13 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
             failed = True
             break
 
-    # ✅ ALWAYS compute health
     health = compute_health(results)
+    replay_result = replay_build(receipts)
 
     return {
         "status": "failed" if failed else "success",
         "results": results,
         "receipts": receipts,
         "health": health,
+        "replay_result": replay_result,
     }
