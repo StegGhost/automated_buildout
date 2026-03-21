@@ -8,11 +8,14 @@ def load_canonical(target_dir: str, run_id: str):
     if not path.exists():
         return None
 
-    with path.open() as f:
+    with path.open("r", encoding="utf-8") as f:
         return json.load(f)
 
 
 def detect_replay(target_dir: str, current_run_id: str, prev_run_id: str | None):
+    """
+    Replay detection must compare STATE identity, not RUN identity.
+    """
     if not prev_run_id:
         return False
 
@@ -22,4 +25,4 @@ def detect_replay(target_dir: str, current_run_id: str, prev_run_id: str | None)
     if not current or not previous:
         return False
 
-    return current.get("canonical_hash") == previous.get("canonical_hash")
+    return current.get("state_hash") == previous.get("state_hash")
