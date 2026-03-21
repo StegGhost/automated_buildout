@@ -2,12 +2,30 @@ from engine.cge_store import load_root, load_object
 
 
 def rebuild_state(target_dir: str, global_root: str):
-    root = load_root(target_dir, global_root)
+    """
+    Rebuild state from a CGE global root.
 
-    if not root:
-        return {"status": "not_found"}
+    Flow:
+    1. load global root record
+    2. extract canonical root object hash
+    3. load canonical root object
+    4. load referenced objects
+    """
 
-    object_hashes = root.get("objects", [])
+    root_record = load_root(target_dir, global_root)
+
+    if not root_record:
+        return {"status": "not_found", "count": 0}
+
+    root_hash = root_record.get("root")
+    if not root_hash:
+        return {"status": "invalid_root", "count": 0}
+
+    root_obj = load_object(target_dir, root_hash)
+    if not root_obj:
+        return {"status": "missing_root_object", "count": 0}
+
+    object_hashes = root_obj.get("objects", [])
 
     objects = []
     for h in object_hashes:
@@ -17,7 +35,8 @@ def rebuild_state(target_dir: str, global_root: str):
 
     return {
         "status": "ok",
-        "root": global_root,
+        "global_root": global_root,
+        "root": root_hash,
         "objects": objects,
         "count": len(objects),
     }
