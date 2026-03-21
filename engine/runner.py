@@ -4,19 +4,29 @@ from engine.validator import validate_phase
 from engine.receipt_writer import write_phase_receipt
 from engine.auto_upgrade import ensure_cge
 from engine.build_health import compute_health
-from engine.replay import replay_build
+from engine.replay import replay_build, load_previous_run_receipts
 from engine.run_context import create_run_id, ensure_run_dir
+from engine.migration_validator import validate_migration
+from engine.successor_proof import generate_successor_proof
 
 
 def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.json"):
     ensure_cge()
+
+    # 🔥 NEW: pre-run migration validation
+    migration = validate_migration()
+    if not migration["valid"]:
+        return {
+            "status": "failed",
+            "reason": "migration_invalid",
+            "details": migration,
+        }
 
     phases, manifest = load_phases(manifest_path)
 
     if target_dir is None:
         target_dir = manifest["target_dir"]
 
-    # 🔥 NEW: isolate run
     run_id = create_run_id()
     ensure_run_dir(target_dir, run_id)
 
@@ -59,11 +69,21 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
     health = compute_health(results)
     replay_result = replay_build(receipts)
 
+    previous_receipts = load_previous_run_receipts(target_dir, run_id)
+
+    successor_proof = generate_successor_proof(
+        previous_receipts,
+        receipts,
+        run_id,
+    )
+
     return {
         "status": "failed" if failed else "success",
         "results": results,
         "receipts": receipts,
         "health": health,
         "replay_result": replay_result,
-        "run_id": run_id,  # 🔥 CRITICAL
+        "run_id": run_id,
+        "migration": migration,
+        "successor_proof": successor_proof,
     }
