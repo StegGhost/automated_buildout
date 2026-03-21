@@ -5,9 +5,7 @@ from pathlib import Path
 
 
 def _hash(data: dict) -> str:
-    return hashlib.sha256(
-        json.dumps(data, sort_keys=True).encode()
-    ).hexdigest()
+    return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
 
 
 def write_phase_receipt(
@@ -16,12 +14,16 @@ def write_phase_receipt(
     install_result: dict,
     validation_result: dict,
     parent_hash: str = None,
+    run_id: str = None,
 ):
-    receipts_dir = Path(target_dir) / ".buildout_receipts"
+    if run_id is None:
+        raise ValueError("run_id is required for receipt isolation")
+
+    receipts_dir = Path(target_dir) / ".buildout_receipts" / run_id
     receipts_dir.mkdir(parents=True, exist_ok=True)
 
-    base_payload = {
-        "schema_version": "2.0.0",
+    payload = {
+        "schema_version": "3.0.0",
         "timestamp": time.time(),
         "phase": phase_name,
         "install_result": install_result,
@@ -29,14 +31,13 @@ def write_phase_receipt(
         "parent_hash": parent_hash,
         "variant_score": install_result.get("score"),
         "consensus_mode": install_result.get("mode"),
+        "run_id": run_id,
     }
 
-    receipt_hash = _hash(base_payload)
-
-    payload = dict(base_payload)
+    receipt_hash = _hash(payload)
     payload["receipt_hash"] = receipt_hash
 
-    filename = f"{int(base_payload['timestamp'])}_{phase_name}.json"
+    filename = f"{int(payload['timestamp'])}_{phase_name}.json"
     path = receipts_dir / filename
 
     with path.open("w") as f:
@@ -45,32 +46,3 @@ def write_phase_receipt(
     payload["receipt_path"] = str(path)
 
     return payload
-
-
-def load_existing_receipts(target_dir: str):
-    receipts_dir = Path(target_dir) / ".buildout_receipts"
-
-    if not receipts_dir.exists():
-        return []
-
-    receipts = []
-
-    for file in receipts_dir.glob("*.json"):
-        with file.open() as f:
-            receipts.append(json.load(f))
-
-    # sort chronologically
-    receipts.sort(key=lambda x: x.get("timestamp", 0))
-
-    if not receipts:
-        return []
-
-    # ✅ isolate latest run
-    latest_ts = int(receipts[-1]["timestamp"])
-
-    filtered = [
-        r for r in receipts
-        if int(r.get("timestamp", 0)) == latest_ts
-    ]
-
-    return filtered
