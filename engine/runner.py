@@ -20,8 +20,10 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
 
     # idempotency
     existing_receipts = load_existing_receipts(target_dir)
+
     if existing_receipts:
         replay_result = replay_build(existing_receipts)
+
         if replay_result.get("status") == "ok":
             return {
                 "status": "replayed",
