@@ -19,6 +19,27 @@ def load_run_receipts(target_dir: str, run_id: str):
     return receipts
 
 
+def load_previous_run_receipts(target_dir: str, current_run_id: str):
+    base = Path(target_dir) / ".buildout_receipts"
+
+    if not base.exists():
+        return []
+
+    runs = sorted([p.name for p in base.iterdir() if p.is_dir()])
+
+    if current_run_id not in runs:
+        return []
+
+    idx = runs.index(current_run_id)
+
+    if idx == 0:
+        return []
+
+    prev_run = runs[idx - 1]
+
+    return load_run_receipts(target_dir, prev_run)
+
+
 def replay_build(receipts: list):
     if not receipts:
         return {"status": "empty"}
