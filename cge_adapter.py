@@ -5,65 +5,72 @@ from pathlib import Path
 
 def _hash(data) -> str:
     return hashlib.sha256(
-        json.dumps(data, sort_keys=True).encode()
+        json.dumps(data, sort_keys=True).encode("utf-8")
     ).hexdigest()
 
 
 def build_canonical_run_receipt(run_result: dict):
-    """
-    Canonical representation of a run (state identity)
-    """
-
     canonical = {
         "schema": "cge.canonical.v1",
-        "status": run_result["status"],
+        "run_id": run_result.get("run_id"),
+        "parent_run_id": run_result.get("parent_run_id"),
+        "status": run_result.get("status"),
+        "health": run_result.get("health"),
+        "replay_result": run_result.get("replay_result"),
         "phases": [
             {
-                "phase": r["phase"],
-                "valid": r["valid"],
-                "receipt_hash": r["receipt_hash"],
+                "phase": r.get("phase"),
+                "valid": r.get("valid"),
+                "receipt_hash": r.get("receipt_hash"),
             }
-            for r in run_result["results"]
+            for r in run_result.get("results", [])
         ],
     }
 
-    canonical_hash = _hash(canonical)
-
-    canonical["canonical_hash"] = canonical_hash
-
+    canonical["canonical_hash"] = _hash(canonical)
     return canonical
 
 
 def write_canonical_receipt(target_dir: str, run_id: str, canonical: dict):
     path = Path(target_dir) / ".buildout_runs" / run_id / "canonical_receipt.json"
-
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    with path.open("w") as f:
-        json.dump(canonical, f, indent=2)
+    with path.open("w", encoding="utf-8") as f:
+        json.dump(canonical, f, indent=2, sort_keys=True)
 
     return str(path)
 
 
 def compute_merkle_root(receipts: list):
-    """
-    Simple merkle root = hash of receipt hashes
-    """
+    hashes = [r["receipt_hash"] for r in receipts if "receipt_hash" in r]
 
-    hashes = [r["receipt_hash"] for r in receipts]
+    if not hashes:
+        return None
 
-    return _hash(hashes)
+    while len(hashes) > 1:
+        next_level = []
+
+        for i in range(0, len(hashes), 2):
+            left = hashes[i]
+            right = hashes[i + 1] if i + 1 < len(hashes) else left
+            next_level.append(hashlib.sha256((left + right).encode("utf-8")).hexdigest())
+
+        hashes = next_level
+
+    return hashes[0]
 
 
 def write_merkle_proof(target_dir: str, run_id: str, merkle_root: str):
     path = Path(target_dir) / ".buildout_runs" / run_id / "merkle.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
 
-    data = {
+    payload = {
         "schema": "cge.merkle.v1",
+        "run_id": run_id,
         "root": merkle_root,
     }
 
-    with path.open("w") as f:
-        json.dump(data, f, indent=2)
+    with path.open("w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2, sort_keys=True)
 
     return str(path)
