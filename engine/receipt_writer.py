@@ -1,11 +1,25 @@
 import json
-import hashlib
 import time
+import hashlib
 from pathlib import Path
 
 
-def _hash(data: dict) -> str:
-    return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
+def _hash_receipt(data: dict) -> str:
+    encoded = json.dumps(data, sort_keys=True).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _atomic_write(path: Path, data: dict):
+    tmp_path = path.with_suffix(".tmp")
+
+    # write temp file
+    with tmp_path.open("w") as f:
+        json.dump(data, f, indent=2)
+        f.flush()
+        f.close()
+
+    # atomic rename (POSIX safe)
+    tmp_path.replace(path)
 
 
 def write_phase_receipt(
@@ -13,36 +27,40 @@ def write_phase_receipt(
     phase_name: str,
     install_result: dict,
     validation_result: dict,
-    parent_hash: str = None,
-    run_id: str = None,
+    parent_hash: str | None,
 ):
-    if run_id is None:
-        raise ValueError("run_id is required for receipt isolation")
+    receipts_dir = Path(target_dir) / ".buildout_receipts"
 
-    receipts_dir = Path(target_dir) / ".buildout_receipts" / run_id
+    # 🔥 ensure directory exists
     receipts_dir.mkdir(parents=True, exist_ok=True)
 
-    payload = {
+    timestamp = time.time()
+
+    receipt = {
         "schema_version": "3.0.0",
-        "timestamp": time.time(),
+        "timestamp": timestamp,
         "phase": phase_name,
         "install_result": install_result,
         "validation_result": validation_result,
         "parent_hash": parent_hash,
-        "variant_score": install_result.get("score"),
-        "consensus_mode": install_result.get("mode"),
-        "run_id": run_id,
+        "variant_score": None,
+        "consensus_mode": "module",
     }
 
-    receipt_hash = _hash(payload)
-    payload["receipt_hash"] = receipt_hash
+    # hash AFTER structure finalized
+    receipt_hash = _hash_receipt(receipt)
+    receipt["receipt_hash"] = receipt_hash
 
-    filename = f"{int(payload['timestamp'])}_{phase_name}.json"
-    path = receipts_dir / filename
+    filename = f"{int(timestamp)}_{phase_name.replace('.', '_')}.json"
+    receipt_path = receipts_dir / filename
 
-    with path.open("w") as f:
-        json.dump(payload, f, indent=2)
+    # 🔥 ATOMIC WRITE
+    _atomic_write(receipt_path, receipt)
 
-    payload["receipt_path"] = str(path)
+    # 🔥 WRITE BARRIER (ensure visible + readable)
+    with receipt_path.open() as f:
+        json.load(f)
 
-    return payload
+    receipt["receipt_path"] = str(receipt_path)
+
+    return receipt
