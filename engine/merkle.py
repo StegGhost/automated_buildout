@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 def _hash(data: str) -> str:
-    return hashlib.sha256(data.encode()).hexdigest()
+    return hashlib.sha256(data.encode("utf-8")).hexdigest()
 
 
 def _hash_receipt(receipt: dict) -> str:
@@ -12,48 +12,31 @@ def _hash_receipt(receipt: dict) -> str:
 
 
 def build_merkle_tree(receipts: list, run_dir: Path):
-    """
-    Builds a simple merkle tree from receipts.
-    """
-
     if not receipts:
-        return {
-            "root": None,
-            "nodes": []
-        }
+        data = {"root": None, "levels": [], "leaf_count": 0}
+        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / "merkle.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
+        return data
 
-    # Step 1: leaf hashes
     leaves = [_hash_receipt(r) for r in receipts]
-
     tree = [leaves]
-
-    # Step 2: build tree upward
     current = leaves
 
     while len(current) > 1:
         next_level = []
-
         for i in range(0, len(current), 2):
             left = current[i]
             right = current[i + 1] if i + 1 < len(current) else left
-
-            combined = _hash(left + right)
-            next_level.append(combined)
-
+            next_level.append(_hash(left + right))
         tree.append(next_level)
         current = next_level
 
-    root = current[0]
-
-    merkle_data = {
-        "root": root,
+    data = {
+        "root": current[0],
         "levels": tree,
         "leaf_count": len(leaves),
     }
 
-    # write to disk
-    (run_dir / "merkle.json").write_text(
-        json.dumps(merkle_data, indent=2)
-    )
-
-    return merkle_data
+    run_dir.mkdir(parents=True, exist_ok=True)
+    (run_dir / "merkle.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
+    return data
