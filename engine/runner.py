@@ -6,6 +6,7 @@ from engine.auto_upgrade import ensure_cge
 from engine.build_health import compute_health
 from engine.replay import replay_build
 from engine.state_lock import acquire_lock, release_lock
+from engine.receipt_loader import load_existing_receipts
 
 
 def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.json"):
@@ -16,7 +17,25 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
     if target_dir is None:
         target_dir = manifest["target_dir"]
 
-    # 🔥 acquire lock
+    # 🔥 NEW: Check for existing receipts BEFORE execution
+    existing_receipts = load_existing_receipts(target_dir)
+
+    if existing_receipts:
+        replay_result = replay_build(existing_receipts)
+
+        if replay_result.get("status") == "ok":
+            return {
+                "status": "replayed",
+                "receipts": existing_receipts,
+                "health": {
+                    "health_score": 1.0,
+                    "total_phases": len(existing_receipts),
+                    "passed": len(existing_receipts),
+                },
+                "replay_result": replay_result,
+            }
+
+    # 🔒 acquire lock
     lock = acquire_lock(target_dir)
     if not lock.get("acquired"):
         return {"status": "locked"}
@@ -57,10 +76,7 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
                 failed = True
                 break
 
-        # 🔥 replay validation
         replay_result = replay_build(receipts)
-
-        # 🔥 health
         health = compute_health(results)
 
         return {
@@ -72,5 +88,4 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
         }
 
     finally:
-        # 🔥 ALWAYS release lock
         release_lock(target_dir)
