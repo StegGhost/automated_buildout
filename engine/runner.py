@@ -7,6 +7,16 @@ from engine.run_manager import create_run, get_latest_run
 from engine.replay import replay_build
 from engine.lineage import write_lineage
 
+from engine.cge_adapter import (
+    build_canonical_run_receipt,
+    write_canonical_receipt,
+    compute_merkle_root,
+    write_merkle_proof,
+)
+
+# 🔥 NEW
+from engine.idempotency import detect_replay
+
 
 def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.json"):
     phases, manifest = load_phases(manifest_path)
@@ -14,14 +24,11 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
     if target_dir is None:
         target_dir = manifest["target_dir"]
 
-    # 🔹 Detect previous run
     prev_run_id = get_latest_run(target_dir)
 
-    # 🔹 Create new run
     run = create_run(target_dir)
     run_id = run["run_id"]
 
-    # 🔹 Link lineage
     write_lineage(target_dir, run_id, prev_run_id)
 
     results = []
@@ -62,10 +69,9 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
 
     health = compute_health(results)
 
-    # 🔹 Replay validation (run-scoped)
     replay_result = replay_build(target_dir, run_id)
 
-    return {
+    run_result = {
         "status": "failed" if failed else "success",
         "run_id": run_id,
         "parent_run_id": prev_run_id,
@@ -74,3 +80,26 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
         "health": health,
         "replay_result": replay_result,
     }
+
+    # 🔹 CGE layer
+    canonical = build_canonical_run_receipt(run_result)
+    canonical_path = write_canonical_receipt(target_dir, run_id, canonical)
+
+    merkle_root = compute_merkle_root(receipts)
+    merkle_path = write_merkle_proof(target_dir, run_id, merkle_root)
+
+    # 🔥 IDENTITY CHECK (NEW)
+    is_replay = detect_replay(target_dir, run_id, prev_run_id)
+
+    if is_replay:
+        run_result["status"] = "replayed"
+
+    run_result["cge"] = {
+        "canonical_hash": canonical["canonical_hash"],
+        "canonical_path": canonical_path,
+        "merkle_root": merkle_root,
+        "merkle_path": merkle_path,
+        "is_replay": is_replay,
+    }
+
+    return run_result
