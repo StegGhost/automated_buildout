@@ -2,43 +2,27 @@ from engine.planner import load_phases
 from engine.installer import install_phase
 from engine.validator import validate_phase
 from engine.receipt_writer import write_phase_receipt
-from engine.auto_upgrade import ensure_cge
 from engine.build_health import compute_health
+from engine.run_manager import create_run, get_latest_run
 from engine.replay import replay_build
-from engine.state_lock import acquire_lock, release_lock
-from engine.receipt_loader import load_existing_receipts
-from engine.variant_executor import execute_variants
+from engine.lineage import write_lineage
 
 
 def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.json"):
-    ensure_cge()
-
     phases, manifest = load_phases(manifest_path)
 
     if target_dir is None:
         target_dir = manifest["target_dir"]
 
-    # idempotency
-    existing_receipts = load_existing_receipts(target_dir)
+    # 🔹 Detect previous run
+    prev_run_id = get_latest_run(target_dir)
 
-    if existing_receipts:
-        replay_result = replay_build(existing_receipts)
+    # 🔹 Create new run
+    run = create_run(target_dir)
+    run_id = run["run_id"]
 
-        if replay_result.get("status") == "ok":
-            return {
-                "status": "replayed",
-                "receipts": existing_receipts,
-                "health": {
-                    "health_score": 1.0,
-                    "total_phases": len(existing_receipts),
-                    "passed": len(existing_receipts),
-                },
-                "replay_result": replay_result,
-            }
-
-    lock = acquire_lock(target_dir)
-    if not lock.get("acquired"):
-        return {"status": "locked"}
+    # 🔹 Link lineage
+    write_lineage(target_dir, run_id, prev_run_id)
 
     results = []
     receipts = []
@@ -46,69 +30,47 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
     parent_hash = None
     failed = False
 
-    try:
-        for phase in phases:
-            name = getattr(phase, "__name__", str(phase))
+    for phase in phases:
+        name = getattr(phase, "__name__", str(phase))
 
-            if hasattr(phase, "variants"):
-                variant_results, selected = execute_variants(
-                    phase,
-                    phase.variants(),
-                    target_dir,
-                    name,
-                    install_phase,
-                    validate_phase,
-                )
+        install_result = install_phase(phase, target_dir)
+        validation = validate_phase(phase, target_dir)
 
-                install_result = selected["install_result"]
-                validation = selected["validation"]
-                selected_variant = selected["variant"]
-                variant_score = selected["score"]
+        receipt = write_phase_receipt(
+            target_dir=target_dir,
+            run_id=run_id,
+            phase_name=name,
+            install_result=install_result,
+            validation_result=validation,
+            parent_hash=parent_hash,
+        )
 
-            else:
-                install_result = install_phase(phase, target_dir)
-                validation = validate_phase(phase, target_dir)
-                selected_variant = None
-                variant_score = None
+        parent_hash = receipt["receipt_hash"]
+        receipts.append(receipt)
 
-            receipt = write_phase_receipt(
-                target_dir,
-                name,
-                install_result,
-                validation,
-                parent_hash,
-            )
+        valid = validation.get("valid", True)
 
-            receipt["selected_variant"] = selected_variant
-            receipt["variant_score"] = variant_score
+        results.append({
+            "phase": name,
+            "valid": valid,
+            "receipt_hash": parent_hash,
+        })
 
-            parent_hash = receipt["receipt_hash"]
-            receipts.append(receipt)
+        if not valid:
+            failed = True
+            break
 
-            valid = validation.get("valid", True)
+    health = compute_health(results)
 
-            results.append({
-                "phase": name,
-                "valid": valid,
-                "receipt_hash": parent_hash,
-                "variant": selected_variant,
-                "score": variant_score,
-            })
+    # 🔹 Replay validation (run-scoped)
+    replay_result = replay_build(target_dir, run_id)
 
-            if not valid:
-                failed = True
-                break
-
-        replay_result = replay_build(receipts)
-        health = compute_health(results)
-
-        return {
-            "status": "failed" if failed else "success",
-            "results": results,
-            "receipts": receipts,
-            "health": health,
-            "replay_result": replay_result,
-        }
-
-    finally:
-        release_lock(target_dir)
+    return {
+        "status": "failed" if failed else "success",
+        "run_id": run_id,
+        "parent_run_id": prev_run_id,
+        "results": results,
+        "receipts": receipts,
+        "health": health,
+        "replay_result": replay_result,
+    }
