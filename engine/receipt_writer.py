@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 def _hash(data: dict):
-    encoded = json.dumps(data, sort_keys=True).encode()
+    encoded = json.dumps(data, sort_keys=True).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
 
 
@@ -20,7 +20,7 @@ def write_phase_receipt(
     ts = time.time()
 
     receipt = {
-        "schema_version": "3.0.0",
+        "schema_version": "3.1.0",
         "run_id": run_id,
         "timestamp": ts,
         "phase": phase_name,
@@ -38,7 +38,7 @@ def write_phase_receipt(
     filename = f"{int(ts)}_{phase_name}.json"
     path = run_dir / filename
 
-    with path.open("w") as f:
+    with path.open("w", encoding="utf-8") as f:
         json.dump(receipt, f, indent=2)
 
     receipt["receipt_path"] = str(path)
