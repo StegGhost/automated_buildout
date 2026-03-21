@@ -4,7 +4,7 @@ from engine.variant_memory import record_variant_result, get_variant_bias
 from engine.variant_policy import pick_variant
 from engine.variant_generator import generate_variants
 from engine.constraints import evaluate_constraints
-from engine.phase_test_runner import run_unit_tests  # ✅ FIXED
+from engine.phase_test_runner import run_unit_tests
 
 
 def execute_variants(phase, variants, target_dir, phase_name, install_phase, validate_phase):
