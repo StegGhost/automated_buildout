@@ -7,6 +7,7 @@ from engine.build_health import compute_health
 from engine.replay import replay_build
 from engine.state_lock import acquire_lock, release_lock
 from engine.receipt_loader import load_existing_receipts
+from engine.variant_executor import execute_variants, select_best_variant
 
 
 def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.json"):
@@ -17,7 +18,7 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
     if target_dir is None:
         target_dir = manifest["target_dir"]
 
-    # 🔥 NEW: Check for existing receipts BEFORE execution
+    # 🔁 idempotency check
     existing_receipts = load_existing_receipts(target_dir)
 
     if existing_receipts:
@@ -35,7 +36,7 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
                 "replay_result": replay_result,
             }
 
-    # 🔒 acquire lock
+    # 🔒 lock
     lock = acquire_lock(target_dir)
     if not lock.get("acquired"):
         return {"status": "locked"}
@@ -50,8 +51,32 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
         for phase in phases:
             name = getattr(phase, "__name__", str(phase))
 
-            install_result = install_phase(phase, target_dir)
-            validation = validate_phase(phase, target_dir)
+            # 🔥 NEW: detect variants
+            phase_variants = None
+
+            if hasattr(phase, "variants"):
+                phase_variants = phase.variants()
+
+            if phase_variants:
+                variant_results = execute_variants(
+                    phase_variants,
+                    target_dir,
+                    install_phase,
+                    validate_phase,
+                )
+
+                best = select_best_variant(variant_results)
+
+                install_result = best["install_result"]
+                validation = best["validation"]
+                selected_variant = best["variant"]
+                variant_score = best["score"]
+
+            else:
+                install_result = install_phase(phase, target_dir)
+                validation = validate_phase(phase, target_dir)
+                selected_variant = None
+                variant_score = None
 
             receipt = write_phase_receipt(
                 target_dir,
@@ -60,6 +85,10 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
                 validation,
                 parent_hash,
             )
+
+            # 🔥 enrich receipt
+            receipt["selected_variant"] = selected_variant
+            receipt["variant_score"] = variant_score
 
             parent_hash = receipt["receipt_hash"]
             receipts.append(receipt)
@@ -70,6 +99,8 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
                 "phase": name,
                 "valid": valid,
                 "receipt_hash": parent_hash,
+                "variant": selected_variant,
+                "score": variant_score,
             })
 
             if not valid:
