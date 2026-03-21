@@ -4,7 +4,7 @@ from engine.variant_memory import record_variant_result, get_variant_bias
 from engine.variant_policy import pick_variant
 from engine.variant_generator import generate_variants
 from engine.constraints import evaluate_constraints
-from engine.test_runner import run_unit_tests
+from engine.phase_test_runner import run_unit_tests  # ✅ FIXED
 
 
 def execute_variants(phase, variants, target_dir, phase_name, install_phase, validate_phase):
@@ -25,13 +25,11 @@ def execute_variants(phase, variants, target_dir, phase_name, install_phase, val
             install_result = install_phase(fn, target_dir)
             validation = validate_phase(fn, target_dir)
 
-            # 🔥 NEW: run unit tests
             test_result = run_unit_tests(fn, target_dir)
 
             if not test_result["passed"]:
                 error = test_result["error"]
 
-            # 🔥 constraints evaluation
             constraint_eval = evaluate_constraints(validation, error)
 
             base_score = 1.0 if constraint_eval["passed"] else 0.0
@@ -72,11 +70,9 @@ def execute_variants(phase, variants, target_dir, phase_name, install_phase, val
                 "error": traceback.format_exc(),
             })
 
-    # 🔥 filter invalid variants BEFORE selection
     valid_results = [r for r in results if r["constraints"]["passed"]]
 
     if not valid_results:
-        # fallback: choose best of all (even invalid)
         selected = pick_variant(results)
     else:
         selected = pick_variant(valid_results)
