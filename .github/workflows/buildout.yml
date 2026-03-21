@@ -28,6 +28,11 @@ jobs:
       - name: Run buildout
         run: python run_buildout.py
 
+      - name: Clean pycache
+        run: |
+          find . -name "__pycache__" -type d -exec rm -rf {} +
+          find . -name "*.pyc" -delete
+
       - name: Run tests
         run: pytest -q
 
