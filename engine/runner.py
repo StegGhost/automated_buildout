@@ -15,9 +15,7 @@ from engine.fallback_executor import execute_with_fallback
 def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.json"):
     ensure_cge()
 
-    # 🔥 Self-healing attempt BEFORE validation
     repair_attempt = attempt_contract_repair()
-
     migration = validate_migration()
 
     if not migration["valid"]:
@@ -45,7 +43,6 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
     for phase in phases:
         name = getattr(phase, "__name__", str(phase))
 
-        # 🔥 Try normal install first
         try:
             install_result = install_phase(phase, target_dir)
         except Exception:
