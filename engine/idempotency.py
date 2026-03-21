@@ -14,7 +14,7 @@ def load_canonical(target_dir: str, run_id: str):
 
 def detect_replay(target_dir: str, current_run_id: str, prev_run_id: str | None):
     """
-    Replay detection must compare STATE identity, not RUN identity.
+    Replay detection compares stable state identity only.
     """
     if not prev_run_id:
         return False
