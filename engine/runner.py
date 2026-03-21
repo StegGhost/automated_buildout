@@ -14,8 +14,10 @@ from engine.merkle import build_merkle_tree
 from engine.run_registry import load_registry, save_registry
 from engine.run_meta import write_run_meta
 from engine.phase_registry import load_phase_registry, save_phase_registry
-from engine.phase_signature import hash_phase_signature
-from engine.state_diff import compute_phase_state, should_rebuild
+
+# CGE
+from engine.cge_adapter import export_run_to_cge
+from engine.cge_registry import load_latest_root, save_latest_root
 
 
 def _hash_manifest(manifest: dict) -> str:
@@ -43,17 +45,12 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
 
     manifest_hash = _hash_manifest(manifest)
 
-    # full replay shortcut
+    # idempotency
     existing = registry.get(manifest_hash)
     if existing:
         return {
             "status": "replayed",
             "canonical_hash": manifest_hash,
-            "results": [],
-            "receipts": [],
-            "health": {"health_score": 1.0, "total_phases": 0, "passed": 0},
-            "replay_result": {"status": "ok"},
-            "merkle": None,
             "run_id": existing.get("run_id"),
         }
 
@@ -66,31 +63,11 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
     parent_hash = None
     failed = False
 
-    dirty = False  # 🔥 propagation flag
-
     for phase in phases:
         name = getattr(phase, "__name__", str(phase))
 
-        phase_sig = hash_phase_signature(name, manifest)
-        prior = phase_registry.get(name)
-
-        # --- simulate execution to compute state ---
         install_result = install_phase(phase, target_dir)
         validation = validate_phase(phase, target_dir)
-
-        state_hash = compute_phase_state(name, install_result, validation)
-
-        rebuild = should_rebuild(name, state_hash, phase_registry, dirty)
-
-        if not rebuild:
-            install_result = {
-                "installed": True,
-                "status": "replayed",
-                "mode": "state_match",
-            }
-            validation = {"valid": True, "replayed": True}
-        else:
-            dirty = True  # 🔥 once dirty, downstream stays dirty
 
         receipt = write_phase_receipt(
             target_dir=target_dir,
@@ -110,16 +87,7 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
             "phase": name,
             "valid": valid,
             "receipt_hash": parent_hash,
-            "replayed": not rebuild,
         })
-
-        if valid:
-            phase_registry[name] = {
-                "signature": phase_sig,
-                "state_hash": state_hash,
-                "last_run_id": run_id,
-                "receipt_hash": parent_hash,
-            }
 
         if not valid:
             failed = True
@@ -129,15 +97,27 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
     replay_result = replay_build(receipts)
     merkle = build_merkle_tree(receipts, run_dir)
 
+    run_result = {
+        "status": "failed" if failed else "success",
+        "run_id": run_id,
+        "results": results,
+        "receipts": receipts,
+        "health": health,
+    }
+
+    # 🔥 CGE EXPORT
+    previous_root = load_latest_root(target_dir)
+
+    cge_result = export_run_to_cge(target_dir, run_result, previous_root)
+
+    save_latest_root(target_dir, cge_result["global_root"])
+
     write_run_meta(
         run_dir,
         {
             "run_id": run_id,
-            "manifest_path": manifest_path,
             "manifest_hash": manifest_hash,
-            "status": "failed" if failed else "success",
-            "phase_count": len(results),
-            "receipt_count": len(receipts),
+            "status": run_result["status"],
         },
     )
 
@@ -150,12 +130,8 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
         save_phase_registry(target_dir, phase_registry)
 
     return {
-        "status": "failed" if failed else "success",
-        "canonical_hash": manifest_hash,
-        "results": results,
-        "receipts": receipts,
-        "health": health,
-        "replay_result": replay_result,
+        **run_result,
+        "cge": cge_result,
         "merkle": merkle,
-        "run_id": run_id,
+        "replay_result": replay_result,
     }
