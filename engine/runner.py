@@ -1,6 +1,7 @@
 from pathlib import Path
 import json
 import hashlib
+import uuid
 
 from engine.planner import load_phases
 from engine.installer import install_phase
@@ -43,9 +44,9 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
     registry_path = _canonical_registry_path(target_dir)
     registry = _load_registry(registry_path)
 
-    # 🔥 PRE-CHECK (this is the fix)
     manifest_hash = _hash_manifest(manifest)
 
+    # idempotency pre-check
     if manifest_hash in registry:
         return {
             "status": "replayed",
@@ -55,13 +56,15 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
             "replay_result": {"status": "ok"},
         }
 
+    # required by receipt_writer
+    run_id = str(uuid.uuid4())
+
     results = []
     receipts = []
 
     parent_hash = None
     failed = False
 
-    # --- EXECUTE BUILD ---
     for phase in phases:
         name = getattr(phase, "__name__", str(phase))
 
@@ -70,6 +73,7 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
 
         receipt = write_phase_receipt(
             target_dir=target_dir,
+            run_id=run_id,
             phase_name=name,
             install_result=install_result,
             validation_result=validation,
@@ -94,19 +98,22 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
     health = compute_health(results)
     replay_result = replay_build(receipts)
 
-    # 🔥 STORE AFTER SUCCESS
-    registry[manifest_hash] = {
-        "runs": len(registry) + 1
-    }
-    _save_registry(registry_path, registry)
+    if not failed:
+        registry[manifest_hash] = {
+            "runs": len(registry) + 1,
+            "run_id": run_id,
+        }
+        _save_registry(registry_path, registry)
 
-    merkle = build_merkle_tree(receipts, target_dir)
+    merkle = build_merkle_tree(receipts, Path(target_dir) / ".buildout_runs" / run_id)
 
     return {
         "status": "failed" if failed else "success",
         "canonical_hash": manifest_hash,
         "results": results,
+        "receipts": receipts,
         "health": health,
         "replay_result": replay_result,
         "merkle": merkle,
+        "run_id": run_id,
     }
