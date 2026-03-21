@@ -7,7 +7,7 @@ from engine.build_health import compute_health
 from engine.replay import replay_build
 from engine.state_lock import acquire_lock, release_lock
 from engine.receipt_loader import load_existing_receipts
-from engine.variant_executor import execute_variants, select_best_variant
+from engine.variant_executor import execute_variants
 
 
 def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.json"):
@@ -51,7 +51,7 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
             name = getattr(phase, "__name__", str(phase))
 
             if hasattr(phase, "variants"):
-                variant_results = execute_variants(
+                variant_results, selected = execute_variants(
                     phase.variants(),
                     target_dir,
                     name,
@@ -59,12 +59,10 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
                     validate_phase,
                 )
 
-                best = select_best_variant(variant_results)
-
-                install_result = best["install_result"]
-                validation = best["validation"]
-                selected_variant = best["variant"]
-                variant_score = best["score"]
+                install_result = selected["install_result"]
+                validation = selected["validation"]
+                selected_variant = selected["variant"]
+                variant_score = selected["score"]
 
             else:
                 install_result = install_phase(phase, target_dir)
