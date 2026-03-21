@@ -10,6 +10,7 @@ def test_buildout_runs():
     assert result["replay_result"]["status"] == "ok"
     assert result["migration"]["valid"] is True
     assert "successor_proof" in result
+    assert "repair_attempt" in result
 
 
 def test_phase_receipts_written():
