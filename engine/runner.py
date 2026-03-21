@@ -15,6 +15,7 @@ from engine.run_registry import load_registry, save_registry
 from engine.run_meta import write_run_meta
 from engine.phase_registry import load_phase_registry, save_phase_registry
 from engine.phase_signature import hash_phase_signature
+from engine.state_diff import compute_phase_state, should_rebuild
 
 
 def _hash_manifest(manifest: dict) -> str:
@@ -42,7 +43,7 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
 
     manifest_hash = _hash_manifest(manifest)
 
-    # full-build idempotency gate
+    # full replay shortcut
     existing = registry.get(manifest_hash)
     if existing:
         return {
@@ -65,23 +66,31 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
     parent_hash = None
     failed = False
 
+    dirty = False  # 🔥 propagation flag
+
     for phase in phases:
         name = getattr(phase, "__name__", str(phase))
+
         phase_sig = hash_phase_signature(name, manifest)
-
         prior = phase_registry.get(name)
-        phase_replayed = prior is not None and prior.get("signature") == phase_sig
 
-        if phase_replayed:
+        # --- simulate execution to compute state ---
+        install_result = install_phase(phase, target_dir)
+        validation = validate_phase(phase, target_dir)
+
+        state_hash = compute_phase_state(name, install_result, validation)
+
+        rebuild = should_rebuild(name, state_hash, phase_registry, dirty)
+
+        if not rebuild:
             install_result = {
                 "installed": True,
                 "status": "replayed",
-                "mode": "phase_replay",
+                "mode": "state_match",
             }
             validation = {"valid": True, "replayed": True}
         else:
-            install_result = install_phase(phase, target_dir)
-            validation = validate_phase(phase, target_dir)
+            dirty = True  # 🔥 once dirty, downstream stays dirty
 
         receipt = write_phase_receipt(
             target_dir=target_dir,
@@ -101,12 +110,13 @@ def run_build(target_dir=None, manifest_path: str = "manifests/example_manifest.
             "phase": name,
             "valid": valid,
             "receipt_hash": parent_hash,
-            "replayed": phase_replayed,
+            "replayed": not rebuild,
         })
 
         if valid:
             phase_registry[name] = {
                 "signature": phase_sig,
+                "state_hash": state_hash,
                 "last_run_id": run_id,
                 "receipt_hash": parent_hash,
             }
