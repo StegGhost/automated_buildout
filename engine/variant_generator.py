@@ -1,68 +1,75 @@
-import random
+import inspect
+from typing import List, Dict, Any
+
+from engine.llm_adapter import llm_mutate_code
 
 
-def mutate_code(original_code: str):
-    """
-    Very simple mutation engine (v4.0 baseline).
-    Later this becomes LLM-driven.
-    """
-
-    mutations = [
-        lambda c: c.replace("print(", "print('mutated:', "),
-        lambda c: c + "\n# mutation",
-        lambda c: c.replace("'", '"'),
-    ]
-
-    mutation = random.choice(mutations)
-    return mutation(original_code)
+def _extract_function_name(src: str) -> str:
+    for line in src.splitlines():
+        line = line.strip()
+        if line.startswith("def ") and "(" in line:
+            return line.split("def ", 1)[1].split("(", 1)[0]
+    return "fn"
 
 
-def generate_variant_from_callable(fn):
-    """
-    Extract source → mutate → create new callable
-    """
-    import inspect
+def _rename_function(src: str, new_name: str) -> str:
+    lines = src.splitlines()
+    for i, ln in enumerate(lines):
+        if ln.strip().startswith("def "):
+            prefix = ln[: ln.find("def ")]
+            rest = ln.strip()[4:]  # after 'def '
+            old = rest.split("(", 1)[0]
+            lines[i] = f"{prefix}def {new_name}{rest[len(old):]}"
+            break
+    return "\n".join(lines)
 
+
+def _compile_callable(src: str, fn_name: str):
+    ns: Dict[str, Any] = {}
     try:
-        source = inspect.getsource(fn)
+        exec(src, ns)
+    except Exception:
+        return None
+    return ns.get(fn_name)
+
+
+def generate_variant_from_callable(fn, suffix: str, context: Dict[str, Any]):
+    try:
+        src = inspect.getsource(fn)
     except Exception:
         return None
 
-    mutated = mutate_code(source)
+    base_name = _extract_function_name(src)
+    new_name = f"{base_name}_{suffix}"
 
-    namespace = {}
+    mutated = llm_mutate_code(src, context=context)
+    mutated = _rename_function(mutated, new_name)
 
-    try:
-        exec(mutated, namespace)
-    except Exception:
-        return None
-
-    # find function in namespace
-    for v in namespace.values():
-        if callable(v):
-            return v
-
-    return None
+    compiled = _compile_callable(mutated, new_name)
+    return compiled
 
 
-def generate_variants(phase, max_new=2):
-    if not hasattr(phase, "variants"):
-        return []
+def generate_variants(phase, base_variants: List[Dict[str, Any]], max_new: int = 2):
+    """
+    For each base variant, generate up to `max_new` LLM-guided variants.
+    """
+    new_variants: List[Dict[str, Any]] = []
 
-    base_variants = phase.variants()
+    for v in base_variants:
+        name = v.get("name")
+        fn = v.get("callable")
 
-    new_variants = []
-
-    for variant in base_variants:
-        fn = variant.get("callable")
-
-        for _ in range(max_new):
-            new_fn = generate_variant_from_callable(fn)
-
+        for i in range(max_new):
+            new_fn = generate_variant_from_callable(
+                fn,
+                suffix=f"gen{i}",
+                context={"phase": getattr(phase, "__name__", str(phase)), "base_variant": name},
+            )
             if new_fn:
                 new_variants.append({
-                    "name": f"{variant['name']}_gen",
+                    "name": f"{name}_gen{i}",
                     "callable": new_fn,
+                    "generated": True,
                 })
 
     return new_variants
