@@ -1,0 +1,75 @@
+name: Headless CMD Merkle Proof
+
+on:
+  repository_dispatch:
+    types: [generate-merkle-proof]
+  workflow_dispatch:
+    inputs:
+      operations_file:
+        description: 'Path to operations JSONL'
+        required: true
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Load operations
+        id: load
+        run: |
+          if [ -f "${{ github.event.inputs.operations_file }}" ]; then
+            OPS=$(cat "${{ github.event.inputs.operations_file }}" | jq -s '.')
+            echo "operations=$OPS" >> $GITHUB_OUTPUT
+          else
+            echo "operations=[]" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Generate merkle proof (tokenless)
+        id: merkle
+        run: |
+          # Pure local computation, no tokens
+          cat > /tmp/merkle.py <<'PYTHON'
+          import hashlib
+          import json
+          import sys
+          
+          ops = json.loads(sys.argv[1])
+          leaves = [hashlib.sha256(json.dumps(op, sort_keys=True).encode()).hexdigest() for op in ops]
+          
+          # Build tree
+          level = leaves
+          while len(level) > 1:
+              next_level = []
+              for i in range(0, len(level), 2):
+                  if i+1 < len(level):
+                      combined = level[i] + level[i+1]
+                  else:
+                      combined = level[i] + level[i]
+                  next_level.append(hashlib.sha256(combined.encode()).hexdigest())
+              level = next_level
+          
+          root = level[0] if level else hashlib.sha256(b'empty').hexdigest()
+          
+          print(json.dumps({
+              "merkle_root": root,
+              "leaf_count": len(leaves),
+              "operations_hash": hashlib.sha256(''.join(leaves).encode()).hexdigest()
+          }))
+          PYTHON
+          
+          PROOF=$(python /tmp/merkle.py '${{ steps.load.outputs.operations }}')
+          echo "proof=$PROOF" >> $GITHUB_OUTPUT
+      
+      - name: Save proof
+        run: |
+          echo '${{ steps.merkle.outputs.proof }}' > merkle-proof.json
+          git add merkle-proof.json
+          git commit -m "Add merkle proof [skip ci]" || echo "No changes"
+          git push
+      
+      - name: Upload proof artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: merkle-proof-${{ github.run_id }}
+          path: merkle-proof.json
