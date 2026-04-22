@@ -1,0 +1,82 @@
+name: Temp Repo Creator
+
+on:
+  workflow_dispatch:
+    inputs:
+      task_id:
+        description: 'Task UUID'
+        required: true
+      workload_rating:
+        description: 'Estimated operations'
+        required: true
+      parent_repo:
+        description: 'Source repo'
+        required: true
+      cge_light:
+        description: 'Include CGE Light'
+        type: boolean
+        default: true
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate temp repo name
+        id: name
+        run: |
+          UUID=$(uuidgen | tr '[:upper:]' '[:lower:]')
+          echo "temp_name=temp-${UUID:0:8}" >> $GITHUB_OUTPUT
+          echo "full_repo=StegGhost/temp-${UUID:0:8}" >> $GITHUB_OUTPUT
+      
+      - name: Create temp repo via GitHub API
+        run: |
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.STEGGHUB_ADMIN_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/orgs/StegGhost/repos \
+            -d '{
+              "name": "${{ steps.name.outputs.temp_name }}",
+              "description": "Temp repo for task ${{ github.event.inputs.task_id }}",
+              "private": true,
+              "auto_init": true
+            }'
+      
+      - name: Clone core build template
+        run: |
+          git clone --depth 1 https://github.com/StegGhost/automated_buildout.git /tmp/buildout
+          cd /tmp/buildout
+          
+          # Run buildout for temp repo
+          python engine/buildout.py \
+            --template minimal \
+            --output /tmp/temp-repo-contents \
+            --include-cge-light ${{ github.event.inputs.cge_light }}
+      
+      - name: Push to temp repo
+        run: |
+          cd /tmp/temp-repo-contents
+          git init
+          git add .
+          git commit -m "Initial buildout for task ${{ github.event.inputs.task_id }}"
+          git remote add origin https://github.com/${{ steps.name.outputs.full_repo }}.git
+          git push -u origin main
+      
+      - name: Record creation
+        run: |
+          mkdir -p meta/temp_repos
+          cat > meta/temp_repos/${{ steps.name.outputs.temp_name }}.json <<EOF
+          {
+            "temp_repo": "${{ steps.name.outputs.full_repo }}",
+            "task_id": "${{ github.event.inputs.task_id }}",
+            "parent_repo": "${{ github.event.inputs.parent_repo }}",
+            "workload_rating": ${{ github.event.inputs.workload_rating }},
+            "created_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "cge_light": ${{ github.event.inputs.cge_light }},
+            "status": "ready"
+          }
+          EOF
+      
+      - name: Return temp repo info
+        run: |
+          echo "TEMP_REPO=${{ steps.name.outputs.full_repo }}" >> $GITHUB_ENV
+          echo "Created temp repo: ${{ steps.name.outputs.full_repo }}"
