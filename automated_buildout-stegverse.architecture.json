@@ -1,0 +1,115 @@
+{
+  "$schema": "https://stegverse.org/schemas/architecture_manifest.schema.json",
+  "schema_version": "1.0.0",
+  "repo_id": "automated_buildout",
+  "repo_type": "platform",
+  "description": "Automate the process of building a repo from core to fully representative of the core StegVerse build philosophy. Multi-phase buildout engine.",
+  "inherits_from": null,
+  "enforcement": "strict",
+  
+  "expected_structure": {
+    "docs/architecture/ARCHITECTURE.md": {
+      "required": true,
+      "purpose": "Canonical architecture documentation"
+    },
+    "docs/architecture/decisions/": {
+      "required": true,
+      "purpose": "Architecture Decision Records"
+    },
+    "docs/guides/": {
+      "required": false,
+      "purpose": "Buildout guides"
+    },
+    "engine/": {
+      "required": true,
+      "purpose": "Buildout engine core",
+      "subdirs": {
+        "__init__.py": { "required": true },
+        "phases.py": { "required": false, "purpose": "Phase orchestration" },
+        "manifest_loader.py": { "required": false, "purpose": "Manifest loading" },
+        "repo_builder.py": { "required": false, "purpose": "Repo construction" }
+      }
+    },
+    "phases/": {
+      "required": true,
+      "purpose": "Buildout phase definitions"
+    },
+    "manifests/": {
+      "required": true,
+      "purpose": "Buildout manifest templates"
+    },
+    "demo/": {
+      "required": true,
+      "purpose": "Demonstration buildouts"
+    },
+    "tests/": {
+      "required": true,
+      "purpose": "Test suite"
+    },
+    "scripts/": {
+      "required": false,
+      "purpose": "Utility scripts"
+    },
+    "requirements.txt": {
+      "required": true,
+      "purpose": "Runtime dependencies"
+    },
+    "pyproject.toml": {
+      "required": true,
+      "purpose": "Modern Python packaging"
+    },
+    "README.md": {
+      "required": true,
+      "purpose": "Project overview"
+    },
+    "LICENSE": {
+      "required": true,
+      "purpose": "Software license"
+    },
+    ".github/workflows/": {
+      "required": true,
+      "purpose": "CI/CD workflows"
+    }
+  },
+
+  "file_rules": {
+    "naming_conventions": {
+      "python_modules": "snake_case",
+      "classes": "PascalCase",
+      "functions": "snake_case",
+      "test_files": "test_*.py"
+    },
+    "forbidden_patterns": [
+      ".*secret.*",
+      ".*password.*",
+      "\\.env$",
+      "\\.pyc$",
+      "__pycache__"
+    ]
+  },
+
+  "migration_rules": {
+    "review_needed_path": "review_needed/",
+    "legacy_path": "legacy/",
+    "wiring_path": "wiring/",
+    "auto_migrate": false,
+    "require_approval": true,
+    "syntax_issue_patterns": [
+      ".*\\s+.*",
+      ".*[^a-zA-Z0-9_\\-\\./].*"
+    ]
+  },
+
+  "validation_hooks": {
+    "pre_commit": true,
+    "ci_pull_request": true,
+    "ci_push_main": true
+  },
+
+  "integration_points": {
+    "sdk": "github.com/StegVerse-org/StegVerse-SDK",
+    "stegcge": "github.com/StegGhost/StegCGE",
+    "entity_sandbox_runner": "github.com/StegGhost/entity-sandbox-runner",
+    "stegdb": "github.com/StegVerse-Labs/StegDB"
+  }
+}
