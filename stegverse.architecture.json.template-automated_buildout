@@ -1,0 +1,89 @@
+{
+  "$schema": "https://stegverse.org/schemas/architecture_manifest.schema.json",
+  "schema_version": "1.0.0",
+  "repo_id": "automated_buildout",
+  "repo_type": "build",
+  "description": "Automated buildout \u2014 constructs ephemeral repos from core to fully representative of the StegVerse build philosophy.",
+  "inherits_from": null,
+  "enforcement": "strict",
+  "expected_structure": {
+    "docs/architecture/ARCHITECTURE.md": {
+      "required": true,
+      "purpose": "Canonical architecture documentation"
+    },
+    "docs/architecture/decisions/": {
+      "required": true,
+      "purpose": "Architecture Decision Records"
+    },
+    "README.md": {
+      "required": true,
+      "purpose": "Project overview"
+    },
+    "LICENSE": {
+      "required": true,
+      "purpose": "Software license"
+    },
+    ".github/workflows/": {
+      "required": true,
+      "purpose": "CI/CD workflows"
+    },
+    "requirements.txt": {
+      "required": true,
+      "purpose": "Runtime dependencies"
+    },
+    "pyproject.toml": {
+      "required": false,
+      "purpose": "Modern Python packaging"
+    },
+    "tests/": {
+      "required": true,
+      "purpose": "Test suite"
+    },
+    "src/buildout/": {
+      "required": true,
+      "purpose": "Buildout engine"
+    },
+    "templates/": {
+      "required": true,
+      "purpose": "Repo templates"
+    },
+    "scripts/": {
+      "required": true,
+      "purpose": "Build scripts"
+    }
+  },
+  "file_rules": {
+    "naming_conventions": {
+      "python_modules": "snake_case",
+      "classes": "PascalCase",
+      "functions": "snake_case",
+      "test_files": "test_*.py"
+    },
+    "forbidden_patterns": [
+      ".*secret.*",
+      ".*password.*",
+      "\\.env$",
+      "\\.pyc$",
+      "__pycache__",
+      ".*\\.tmp$",
+      ".*~$"
+    ]
+  },
+  "migration_rules": {
+    "review_needed_path": "review_needed/",
+    "legacy_path": "legacy/",
+    "wiring_path": "wiring/",
+    "auto_migrate": false,
+    "require_approval": true
+  },
+  "validation_hooks": {
+    "pre_commit": false,
+    "ci_pull_request": true,
+    "ci_push_main": true,
+    "scheduled_audit": "weekly"
+  },
+  "integration_points": {
+    "entity_sandbox": "github.com/StegGhost/entity-sandbox-runner",
+    "stegcge": "github.com/StegGhost/StegCGE"
+  }
+}
